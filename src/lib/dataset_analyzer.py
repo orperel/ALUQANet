@@ -1,5 +1,7 @@
+from datetime import datetime
 import torch
 from src.lib.inference_utils import create_drop_reader, load_model, data_instance_to_model_input
+from torch.utils.tensorboard import SummaryWriter
 
 
 def extract_instance_properties(instance):
@@ -70,6 +72,7 @@ model, config = load_model(model_path='results/naqanet_single_epoch/model.tar.gz
 instances = create_drop_reader(config, data_split='dev', lazy=True)
 
 feature_vecs = []
+labels = []
 
 for instance_idx, instance in enumerate(instances):
 
@@ -81,9 +84,27 @@ for instance_idx, instance in enumerate(instances):
     prediction = model(**model_input)
 
     # TODO (Or Perel): Decide how to mark the prediction here..
-    em_correct_label = 1 if prediction['answer'][0]['value'] == entry['answer_texts'][0] else 0
+    prediction_answer_text = None
+    if prediction['answer'][0]['answer_type'] == 'passage_span':
+        prediction_answer_text = prediction['answer'][0]['value']
+    elif prediction['answer'][0]['answer_type'] == 'count':
+        prediction_answer_text = prediction['answer'][0]['count']
 
-    feature_vecs.append((feature_vec, em_correct_label))
+    em_correct_label = 'Correct' if prediction_answer_text == entry['answer_texts'][0] else 'Incorrect'
+
+    feature_vecs.append(feature_vec)
+    labels.append(em_correct_label)
+
+    if len(feature_vecs) == 2:
+        break
 
 
-# TODO (Or Perel): Call Tensorboard summary object here with feature vecs..
+# Writer will output to ./tb_data_analysis/ directory
+# (1) To run the TB server use:
+# tensorboard --logdir=tb_data_analysis
+# (2) Forward the display to local machine with:
+# ssh -i <PATH_TO_REMOTE_MACHINE_SSH_KEY> -N -L localhost:6006:localhost:6006 ubuntu@<REMOTE_IP>
+writer = SummaryWriter("tb_data_analysis/" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+feature_vecs_tensor = torch.stack(feature_vecs)
+writer.add_embedding(feature_vecs_tensor, metadata=labels, tag='all_features')
+writer.close()
