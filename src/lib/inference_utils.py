@@ -17,12 +17,12 @@ def load_model(model_path, weights_path):
 def create_drop_reader(config, data_split='dev', lazy=True):
     if data_split == 'dev':
         config_params = config['validation_dataset_reader']
-        data_path = config['validation_data_path']
+        data_path = "../../data/drop_dataset/drop_dataset_dev.json"
     elif data_split == 'train':
         config_params = config['dataset_reader']
-        data_path = config['train_data_path']
+        data_path = "../../data/drop_dataset/drop_dataset_train.json"
     else:
-        raise ValueError(f'Unsupported datasplit {datasplit}, please use "dev" or "train"')
+        raise ValueError(f'Unsupported datasplit {data_split}, please use "dev" or "train"')
 
     data_reader = DatasetReader.from_params(config_params)
     data_reader.lazy = lazy

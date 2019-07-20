@@ -4,6 +4,25 @@ from src.lib.inference_utils import create_drop_reader, load_model, data_instanc
 from torch.utils.tensorboard import SummaryWriter
 
 
+def get_instance_answer_types(instance):
+    metadata = instance['metadata'].metadata
+
+    answer_types = []
+    if len(metadata['answer_info']['answer_passage_spans']) > 0:
+        answer_types.append("passage_span")
+
+    if len(metadata['answer_info']['answer_question_spans']) > 0:
+        answer_types.append("question_span")
+
+    if len(metadata['answer_info']['signs_for_add_sub_expressions']) > 0:
+        answer_types.append("arithmetic")
+
+    if len(metadata['answer_info']['counts']) > 0:
+        answer_types.append("count")
+
+    return answer_types
+
+
 def extract_instance_properties(instance):
     metadata = instance['metadata'].metadata
 
@@ -18,16 +37,17 @@ def extract_instance_properties(instance):
     answer_texts = instance['metadata'].metadata['answer_texts']
 
     answer_as_passage_spans = metadata['answer_info']['answer_passage_spans']
-    is_answer_psg_span = 0 if len(answer_as_passage_spans) == 0 else 1
+    is_answer_psg_span = "passage_span" in get_instance_answer_types(instance)
 
     answer_as_question_spans = metadata['answer_info']['answer_question_spans']
-    is_answer_qstn_span = 0 if len(answer_as_question_spans) == 0 else 1
+    is_answer_qstn_span = "question_span" in get_instance_answer_types(instance)
 
     # TODO (Or Perel): TBD - need to decide what we do with that one
     signs_for_add_sub_expressions = metadata['answer_info']['signs_for_add_sub_expressions']
+    is_answer_arithmetic = "arithmetic" in get_instance_answer_types(instance)
 
     counts = metadata['answer_info']['counts']
-    is_answer_counts = 0 if len(counts) == 0 else 1
+    is_answer_counts = "count" in get_instance_answer_types(instance)
 
     is_answer_number = any([len(answer['number']) > 0 for answer in metadata['answer_annotations']])
     is_answer_date = any([any([val != "" for val in answer['date'].values()])
@@ -48,6 +68,7 @@ def extract_instance_properties(instance):
         is_answer_span=is_answer_span,
         is_answer_psg_span=is_answer_psg_span,
         is_answer_qstn_span=is_answer_qstn_span,
+        is_answer_arithmetic=is_answer_arithmetic,
         is_answer_counts=is_answer_counts,
         is_answer_number=is_answer_number,
         is_answer_date=is_answer_date
@@ -62,13 +83,14 @@ def featurize_entry(entry):
         entry['is_answer_psg_span'],
         entry['is_answer_qstn_span'],
         entry['is_answer_counts'],
+        entry['is_answer_arithmetic'],
         entry['is_answer_number'],
         entry['is_answer_date']
     ])
 
 
-model, config = load_model(model_path='results/naqanet_single_epoch/model.tar.gz',
-                           weights_path='results/naqanet/best.th')
+model, config = load_model(model_path='../results/naqanet_single_epoch/model.tar.gz',
+                           weights_path='../results/naqanet/best.th')
 instances = create_drop_reader(config, data_split='dev', lazy=True)
 
 feature_vecs = []
@@ -83,17 +105,16 @@ for instance_idx, instance in enumerate(instances):
     model_input = data_instance_to_model_input(instance, model)
     prediction = model(**model_input)
 
-    # TODO (Or Perel): Decide how to mark the prediction here..
-    prediction_answer_text = None
-    if prediction['answer'][0]['answer_type'] == 'passage_span':
-        prediction_answer_text = prediction['answer'][0]['value']
-    elif prediction['answer'][0]['answer_type'] == 'count':
-        prediction_answer_text = prediction['answer'][0]['count']
+    metric = model.get_metrics(reset=True)
+    em_correct_label = int(metric['em'])
 
-    em_correct_label = 'Correct' if prediction_answer_text == entry['answer_texts'][0] else 'Incorrect'
+    f1_threshold = 0.8
+    f1_correct_label = 1 if metric['f1'] > f1_threshold else 0
+
+    answer_type_correct = prediction["answer"][0]["answer_type"] in get_instance_answer_types(instance)
 
     feature_vecs.append(feature_vec)
-    labels.append(em_correct_label)
+    labels.append([em_correct_label, f1_correct_label, answer_type_correct])
 
     if len(feature_vecs) == 2:
         break
@@ -106,5 +127,7 @@ for instance_idx, instance in enumerate(instances):
 # ssh -i <PATH_TO_REMOTE_MACHINE_SSH_KEY> -N -L localhost:6006:localhost:6006 ubuntu@<REMOTE_IP>
 writer = SummaryWriter("tb_data_analysis/" + datetime.now().strftime("%Y%m%d-%H%M%S"))
 feature_vecs_tensor = torch.stack(feature_vecs)
-writer.add_embedding(feature_vecs_tensor, metadata=labels, tag='all_features')
+writer.add_embedding(feature_vecs_tensor, metadata=labels, tag='all_features', metadata_header=['em', 'f1', 'answer_type_correct'])
 writer.close()
+
+
