@@ -109,6 +109,7 @@ venv.bak/
 *metrics.json
 *vocabulary/
 *log/
+src/results/naqanet_single_epoch/best.th
 
 # MISC
 *.DS_Store
