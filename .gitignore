@@ -102,3 +102,9 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# AllenNLP temp files
+*training_state_epoch_*
+*model_state_epoch*
+*metrics_epoch*
+
