@@ -1,4 +1,5 @@
 from datetime import datetime
+from collections import namedtuple
 import torch
 from src.lib.inference_utils import create_drop_reader, load_model, data_instance_to_model_input
 from torch.utils.tensorboard import SummaryWriter
@@ -95,6 +96,9 @@ instances = create_drop_reader(config, data_split='dev', lazy=True)
 
 feature_vecs = []
 labels = []
+InstanceLabels = namedtuple('InstanceLabels',
+                            ['em_correct', 'f1_score', 'f1_correct', 'answer_types', 'answer_type_correct',
+                             'question_tokens', 'answer_texts', 'passage_numbers', 'passage_tokens'])
 
 for instance_idx, instance in enumerate(instances):
 
@@ -102,6 +106,7 @@ for instance_idx, instance in enumerate(instances):
     entry = extract_instance_properties(instance)
     feature_vec = featurize_entry(entry)
 
+    # Extract labels here
     model_input = data_instance_to_model_input(instance, model)
     prediction = model(**model_input)
 
@@ -109,16 +114,29 @@ for instance_idx, instance in enumerate(instances):
     em_correct_label = int(metric['em'])
 
     f1_threshold = 0.8
-    f1_correct_label = 1 if metric['f1'] > f1_threshold else 0
+    f1_score = metric['f1']
+    f1_score_label = '%.2f' % f1_score
+    f1_correct_label = 1 if f1_score > f1_threshold else 0
 
-    answer_type_correct = prediction["answer"][0]["answer_type"] in get_instance_answer_types(instance)
+    answer_types = get_instance_answer_types(instance)
+    answer_type_correct = 1 if prediction["answer"][0]["answer_type"] in answer_types else 0
+    answer_type_text = ' '.join(answer_types)
+
+    passage_numbers = ' '.join([str(num) for num in entry['passage_numbers']])
+
+    instance_labels = InstanceLabels(em_correct=em_correct_label,
+                                     f1_score=f1_score_label,
+                                     f1_correct=f1_correct_label,
+                                     answer_types=answer_type_text,
+                                     answer_type_correct=answer_type_correct,
+                                     question_tokens=' '.join(entry['question_tokens']),
+                                     answer_texts=' '.join(entry['answer_texts']),
+                                     passage_numbers=passage_numbers,
+                                     passage_tokens=' '.join(entry['passage_tokens']),
+                                     )
 
     feature_vecs.append(feature_vec)
-    labels.append([em_correct_label, f1_correct_label, answer_type_correct])
-
-    if len(feature_vecs) == 2:
-        break
-
+    labels.append(tuple(instance_labels))
 
 # Writer will output to ./tb_data_analysis/ directory
 # (1) To run the TB server use:
@@ -127,7 +145,7 @@ for instance_idx, instance in enumerate(instances):
 # ssh -i <PATH_TO_REMOTE_MACHINE_SSH_KEY> -N -L localhost:6006:localhost:6006 ubuntu@<REMOTE_IP>
 writer = SummaryWriter("tb_data_analysis/" + datetime.now().strftime("%Y%m%d-%H%M%S"))
 feature_vecs_tensor = torch.stack(feature_vecs)
-writer.add_embedding(feature_vecs_tensor, metadata=labels, tag='all_features', metadata_header=['em', 'f1', 'answer_type_correct'])
+writer.add_embedding(feature_vecs_tensor, metadata=labels, tag='all_features', metadata_header=InstanceLabels._fields)
 writer.close()
 
 
