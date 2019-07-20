@@ -14,7 +14,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -102,3 +101,17 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# AllenNLP temp files
+*training_state_epoch_*
+*model_state_epoch*
+*metrics_epoch*
+*metrics.json
+*vocabulary/
+*log/
+src/results/naqanet_single_epoch/best.th
+
+# MISC
+*.DS_Store
+*.idea
+
