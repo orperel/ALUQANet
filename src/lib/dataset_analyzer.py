@@ -55,6 +55,12 @@ def extract_instance_properties(instance):
                           for answer in metadata['answer_annotations']])
     is_answer_span = any([len(answer['spans']) > 0 for answer in metadata['answer_annotations']])
 
+    question_contains_or = any(token == "or" for token in metadata['question_tokens'])
+
+    question_about_football = any(token in term for term in ["touchdowns", "yards", "fields", "quarterbacks", "points", "passes", "kicks", "goals"] for token in metadata['question_tokens'])
+
+    question_contains_percent = any(token in "percents" for token in metadata['question_tokens'])
+
     entry = dict(
         question_id=question_id,
         passage_id=passage_id,
@@ -72,7 +78,10 @@ def extract_instance_properties(instance):
         is_answer_arithmetic=is_answer_arithmetic,
         is_answer_counts=is_answer_counts,
         is_answer_number=is_answer_number,
-        is_answer_date=is_answer_date
+        is_answer_date=is_answer_date,
+        question_contains_or=question_contains_or,
+        question_about_football=question_about_football,
+        question_contains_percent=question_contains_percent
     )
 
     return entry
@@ -80,13 +89,14 @@ def extract_instance_properties(instance):
 def featurize_entry(entry):
 
     return torch.tensor([
-        entry['is_answer_span'],
         entry['is_answer_psg_span'],
         entry['is_answer_qstn_span'],
         entry['is_answer_counts'],
         entry['is_answer_arithmetic'],
-        entry['is_answer_number'],
-        entry['is_answer_date']
+        entry['is_answer_date'],
+        entry['question_contains_or'],
+        entry['question_about_football'],
+        entry['question_contains_percent']
     ])
 
 
