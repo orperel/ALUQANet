@@ -120,9 +120,9 @@ for instance_idx, instance in enumerate(instances):
 
     answer_types = get_instance_answer_types(instance)
     answer_type_correct = 1 if prediction["answer"][0]["answer_type"] in answer_types else 0
-    answer_type_text = ' '.join(answer_types)
+    answer_type_text = ' '.join(answer_types) if len(answer_types) > 0 else "None"
 
-    passage_numbers = ' '.join([str(num) for num in entry['passage_numbers']])
+    passage_numbers = ' '.join([str(num) for num in entry['passage_numbers']]) if len(entry['passage_numbers']) > 0 else "None"
 
     instance_labels = InstanceLabels(em_correct=em_correct_label,
                                      f1_score=f1_score_label,
