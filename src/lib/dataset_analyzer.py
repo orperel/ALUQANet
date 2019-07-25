@@ -89,11 +89,13 @@ def extract_instance_properties(instance):
 def featurize_entry(entry):
 
     return torch.tensor([
+        entry['is_answer_number'],
+        entry['is_answer_span'],
+        entry['is_answer_date'],
         entry['is_answer_psg_span'],
         entry['is_answer_qstn_span'],
         entry['is_answer_counts'],
         entry['is_answer_arithmetic'],
-        entry['is_answer_date'],
         entry['question_contains_or'],
         entry['question_about_football'],
         entry['question_contains_percent']
@@ -108,7 +110,7 @@ feature_vecs = []
 labels = []
 InstanceLabels = namedtuple('InstanceLabels',
                             ['em_correct', 'f1_score', 'f1_correct', 'answer_types', 'answer_type_correct',
-                             'question_tokens', 'answer_texts', 'passage_numbers', 'passage_tokens'])
+                             'question_tokens', 'answer_texts', 'passage_numbers', 'passage_tokens', 'answer_content'])
 
 for instance_idx, instance in enumerate(instances):
 
@@ -134,6 +136,16 @@ for instance_idx, instance in enumerate(instances):
 
     passage_numbers = ' '.join([str(num) for num in entry['passage_numbers']]) if len(entry['passage_numbers']) > 0 else "None"
 
+    answer_contents = []
+    if entry['is_answer_number']:
+        answer_contents.append("number")
+    if entry['is_answer_span']:
+        answer_contents.append("span")
+    if entry['is_answer_date']:
+        answer_contents.append("date")
+
+    answer_content = ' '.join(answer_contents) if len(answer_contents) > 0 else "None"
+
     instance_labels = InstanceLabels(em_correct=em_correct_label,
                                      f1_score=f1_score_label,
                                      f1_correct=f1_correct_label,
@@ -143,6 +155,7 @@ for instance_idx, instance in enumerate(instances):
                                      answer_texts=' '.join(entry['answer_texts']),
                                      passage_numbers=passage_numbers,
                                      passage_tokens=' '.join(entry['passage_tokens']),
+                                     answer_content=answer_content
                                      )
 
     feature_vecs.append(feature_vec)
