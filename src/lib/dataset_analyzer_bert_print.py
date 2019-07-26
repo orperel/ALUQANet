@@ -1,12 +1,9 @@
-from datetime import datetime
-from collections import namedtuple
 import json
 import torch
 
 from drop_bert.augmented_bert_plus import NumericallyAugmentedBERTPlus
 from drop_bert.data_processing import BertDropTokenizer, BertDropTokenIndexer, BertDropReader
-from src.lib.inference_utils import create_drop_reader, load_model, data_instance_to_model_input
-from torch.utils.tensorboard import SummaryWriter
+from src.lib.inference_utils import data_instance_to_model_input
 
 from allennlp.data.vocabulary import Vocabulary
 
@@ -58,25 +55,30 @@ def extract_instance_properties(instance):
     return entry
 
 
-device_num = 0
-device = torch.device('cuda:%d' % device_num)
+def load_nabert_model(weights_path):
+    device_num = 0
+    device = torch.device('cuda:%d' % device_num)
+    model = NumericallyAugmentedBERTPlus(Vocabulary(), 'bert-base-uncased', special_numbers=[100, 1])
+    model.load_state_dict(torch.load(weights_path, map_location=device))
+    model.to(device)
+    model.eval()
 
-tokenizer = BertDropTokenizer('bert-base-uncased')
-token_indexer = BertDropTokenIndexer('bert-base-uncased')
-model = NumericallyAugmentedBERTPlus(Vocabulary(), 'bert-base-uncased', special_numbers=[100, 1])
-reader = BertDropReader(tokenizer, {'tokens': token_indexer},
-                        extra_numbers=[100, 1])
-model_weights = '/home/itaysofer/Desktop/Drop/run/nabert/serialization2/best.th'
+    return model
 
-model.load_state_dict(torch.load(model_weights, map_location=device))
-model.to(device)
-model.eval()
 
-reader.answer_type = None
-instances = reader.read('../../data/drop_dataset/drop_dataset_dev.json')
+def create_nabert_reader(data_path):
+    tokenizer = BertDropTokenizer('bert-base-uncased')
+    token_indexer = BertDropTokenIndexer('bert-base-uncased')
+    reader = BertDropReader(tokenizer, {'tokens': token_indexer},
+                            extra_numbers=[100, 1])
+    reader.answer_type = None
+    instances = reader.read(data_path)
 
-feature_vecs = []
-labels = []
+    return instances
+
+
+model = load_nabert_model(weights_path='../results/nabert/best.th')
+instances = create_nabert_reader(data_path='../../data/drop_dataset/drop_dataset_dev.json')
 
 examples = []
 for instance_idx, instance in enumerate(instances):
@@ -118,18 +120,16 @@ for instance_idx, instance in enumerate(instances):
 
     examples.append(example)
 
-    # if len(examples) > 10:
-    #     break
 
 span_examples = list(filter(lambda e: "span" in e["answer_content"], examples))
 number_examples = list(filter(lambda e: "number" in e["answer_content"], examples))
 date_examples = list(filter(lambda e: "date" in e["answer_content"], examples))
 
 
-with open("./examples/span_examples.json","w+") as f:
+with open("./examples/span_examples.json", "w+") as f:
     json.dump(span_examples, f)
 
-with open("./examples/number_examples.json","w+") as f:
+with open("./examples/number_examples.json", "w+") as f:
     json.dump(number_examples, f)
 
 with open("./examples/date_examples.json", "w+") as f:
