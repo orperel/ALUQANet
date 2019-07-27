@@ -122,7 +122,7 @@ def create_nabert_reader(data_path):
     tokenizer = BertDropTokenizer('bert-base-uncased')
     token_indexer = BertDropTokenIndexer('bert-base-uncased')
     reader = BertDropReader(tokenizer, {'tokens': token_indexer},
-                            extra_numbers=[100, 1])
+                            extra_numbers=[100, 1], lazy=True)
     reader.answer_type = None
     instances = reader.read(data_path)
 

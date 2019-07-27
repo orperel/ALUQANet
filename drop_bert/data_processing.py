@@ -111,7 +111,6 @@ class BertDropReader(DatasetReader):
         with open(file_path) as dataset_file:
             dataset = json.load(dataset_file)
             
-        instances = []
         for passage_id, passage_info in tqdm(dataset.items()):
             passage_text = passage_info["passage"].strip()
             
@@ -160,8 +159,8 @@ class BertDropReader(DatasetReader):
                                                  passage_id,
                                                  answer_annotations)
                 if instance is not None:
-                    instances.append(instance)
-        return instances
+                    yield instance
+
                 
     @overrides
     def text_to_instance(self, 
