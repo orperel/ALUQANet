@@ -363,10 +363,15 @@ class AluQACount(Model):
             print()
             print()
             print('Answer: ', metadata[i]['answer_texts'][0])
-            selected_indexs = list((select_probs_masked[i] > 0.9).nonzero().squeeze(1))
+            selected_indexs = list((select_probs_masked[i] > 0.1).nonzero().squeeze(1))
+            probabilities = select_probs_masked[i][(select_probs_masked[i] > 0.1).nonzero().squeeze(1)].tolist()
             for token_index, token in enumerate(metadata[i]['question_passage_tokens']):
                 if token_index in selected_indexs:
                     print(colored(token, 'red'), " ", end='')
+                    print(colored('(' + "%.4f" % probabilities[0] + '%)', 'red'), " ", end='')
+
+                    selected_indexs.pop(0)
+                    probabilities.pop(0)
                 else:
                     print(token, " ", end='')
                 if token.text == "." or token.text == "[SEP]":
