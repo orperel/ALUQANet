@@ -29,13 +29,13 @@
     "validation_data_path": "../../data/drop_dataset/drop_dataset_count.json",
     "trainer": {
         "cuda_device": 0,
-        "keep_serialized_model_every_num_seconds": 3600,
-        "num_epochs": 100,
+        "num_serialized_models_to_keep": 1,
+        "num_epochs": 500,
         "optimizer": {
             "type": "bert_adam",
-            "lr": 1e-05
+            "lr": 1e-06
         },
-        "patience": 10,
+        "patience": 500,
         "summary_interval": 100,
         "validation_metric": "+f1"
     }
