@@ -89,7 +89,7 @@ class AluQACount(Model):
         if "counting" in self.answering_abilities:
             self._counting_index = self.answering_abilities.index("counting")
             self._count_number_predictor = \
-                self.ff(bert_dim, bert_dim, 2)
+                self.ff(2*bert_dim, bert_dim, 2)
 
         self._drop_metrics = DropEmAndF1()
 
@@ -220,7 +220,7 @@ class AluQACount(Model):
             best_answer_ability = torch.argmax(answer_ability_log_probs, 1)
 
         if "counting" in self.answering_abilities:
-            count_number, max_prob, min_prob, select_probs_masked = self._count_module(passage_out, passage_mask)
+            count_number, max_prob, min_prob, select_probs_masked = self._count_module(passage_out, passage_mask, question_vector)
             answer_as_counts = answer_as_counts.squeeze(1)
             gold_count_mask = (answer_as_counts != -1).long()
             count_number = util.replace_masked_values(count_number, gold_count_mask, 0)
@@ -487,9 +487,11 @@ class AluQACount(Model):
         return log_marginal_likelihood_for_question_span
     
     
-    def _count_module(self, passage_out, mask):
+    def _count_module(self, passage_out, mask, question_vector):
+        # Shape: (batch_size, seq_len, 2 * bert_dim)
+        count_predictor_input = torch.cat((passage_out, question_vector.unsqueeze(1).repeat(1, passage_out.size()[1], 1)), -1)
         # Shape: (batch_size, seq_len, 2)
-        select_logits = self._count_number_predictor(passage_out)
+        select_logits = self._count_number_predictor(count_predictor_input)
         select_probs = torch.nn.functional.softmax(select_logits, -1)
         # Info about the best count number prediction
         # Shape: (batch_size,)
