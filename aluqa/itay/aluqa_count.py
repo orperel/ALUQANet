@@ -220,12 +220,12 @@ class AluQACount(Model):
             best_answer_ability = torch.argmax(answer_ability_log_probs, 1)
 
         if "counting" in self.answering_abilities:
-            count_number, max_prob, min_prob, select_probs_masked = self._count_module(passage_out, passage_mask, question_vector)
+            count_number, max_prob, min_prob, select_probs = self._count_module(passage_out, passage_mask, question_vector)
             answer_as_counts = answer_as_counts.squeeze(1)
             gold_count_mask = (answer_as_counts != -1).long()
             count_number = util.replace_masked_values(count_number, gold_count_mask, 0)
 
-            self.print_selection(answer_as_counts, metadata, select_probs_masked)
+            # self.print_selection(answer_as_counts, metadata, select_probs)
 
 
         if "passage_span_extraction" in self.answering_abilities:
@@ -309,7 +309,7 @@ class AluQACount(Model):
         #
         #     output_dict["loss"] = - marginal_log_likelihood.mean()
 
-        output_dict["loss"] = self._count_loss(answer_as_counts, count_number, max_prob, min_prob)
+        output_dict["loss"] = self._count_loss(answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask)
 
         with torch.no_grad():
             # Compute the metrics and add the tokenized input to the output.
@@ -358,13 +358,13 @@ class AluQACount(Model):
 
         return output_dict
 
-    def print_selection(self, answer_as_counts, metadata, select_probs_masked):
+    def print_selection(self, answer_as_counts, metadata, select_probs):
         for i in range(answer_as_counts.size()[0]):
             print()
             print()
             print('Answer: ', metadata[i]['answer_texts'][0])
-            selected_indexs = list((select_probs_masked[i] > 0.1).nonzero().squeeze(1))
-            probabilities = select_probs_masked[i][(select_probs_masked[i] > 0.1).nonzero().squeeze(1)].tolist()
+            selected_indexs = list((select_probs[i] > 0.1).nonzero().squeeze(1))
+            probabilities = select_probs[i][(select_probs[i] > 0.1).nonzero().squeeze(1)].tolist()
             for token_index, token in enumerate(metadata[i]['question_passage_tokens']):
                 if token_index in selected_indexs:
                     print(colored(token, 'red'), " ", end='')
@@ -493,6 +493,10 @@ class AluQACount(Model):
     
     
     def _count_module(self, passage_out, mask, question_vector):
+        # if any(math.isnan(number) or math.isinf(number) for number in passage_out.view(-1).tolist()) or \
+        #         any(math.isnan(number) or math.isinf(number) for number in question_vector.view(-1).tolist()):
+        #     print("")
+
         # Shape: (batch_size, seq_len, 2 * bert_dim)
         count_predictor_input = torch.cat((passage_out, question_vector.unsqueeze(1).repeat(1, passage_out.size()[1], 1)), -1)
         # Shape: (batch_size, seq_len, 2)
@@ -523,7 +527,7 @@ class AluQACount(Model):
         return log_marginal_likelihood_for_count
 
 
-    def _count_loss(self, answer_as_counts, count_number, max_prob, min_prob):
+    def _count_loss(self, answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask):
         # Count answers are padded with label -1,
         # so we clamp those paddings to 0 and then mask after `torch.gather()`.
         # Shape: (batch_size, # of count answers)
@@ -534,10 +538,24 @@ class AluQACount(Model):
 
         huber_loss = self.huber_loss(count_number_masked, gold_counts_masked.float())
 
-        selection_loss = (1 - (max_prob - min_prob))*1000
+        selection_loss = 1 - (max_prob - min_prob)
 
-        # Shape: (batch_size, )
-        return huber_loss + selection_loss
+        entropy_loss = self._calc_entropy_loss(select_probs, passage_mask)
+
+        # if math.isnan(huber_loss.item()) or math.isnan(selection_loss.item()) or math.isnan(entropy_loss.item()):
+        #     print("")
+
+        return (huber_loss) + (selection_loss * 1000) + (entropy_loss * 10)
+
+
+    def _calc_entropy_loss(self, select_probs, passage_mask):
+        legal_select_probs = select_probs[(select_probs > 0) & (select_probs < 1)]
+        entropies = -(legal_select_probs * torch.log(legal_select_probs) + (1 - legal_select_probs) * torch.log(1 - legal_select_probs))
+
+        seq_length = passage_mask.sum().float()
+        mean_entropy = entropies.sum() / seq_length
+
+        return mean_entropy
 
 
     def _count_prediction(self, best_count_number):
