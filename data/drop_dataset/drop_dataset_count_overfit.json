@@ -1,0 +1,223 @@
+{
+    "nfl_2201": {
+        "passage": "To start the season, the Lions traveled south to Tampa, Florida to take on the Tampa Bay Buccaneers. The Lions scored first in the first quarter with a 23-yard field goal by Jason Hanson. The Buccaneers tied it up with a 38-yard field goal by Connor Barth, then took the lead when Aqib Talib intercepted a pass from Matthew Stafford and ran it in 28 yards. The Lions responded with a 28-yard field goal. In the second quarter, Detroit took the lead with a 36-yard touchdown catch by Calvin Johnson, and later added more points when Tony Scheffler caught an 11-yard TD pass. Tampa Bay responded with a 31-yard field goal just before halftime. The second half was relatively quiet, with each team only scoring one touchdown. First, Detroit's Calvin Johnson caught a 1-yard pass in the third quarter. The game's final points came when Mike Williams of Tampa Bay caught a 5-yard pass.  The Lions won their regular season opener for the first time since 2007",
+        "qa_pairs": [
+            {
+                "question": "How many field goals were scored in the first quarter?",
+                "answer": {
+                    "number": "3",
+                    "date": {
+                        "day": "",
+                        "month": "",
+                        "year": ""
+                    },
+                    "spans": []
+                },
+                "query_id": "99a50d10-ec43-4040-8c8e-2eb5bafe1906"
+            },
+            {
+                "question": "How many touchdowns were scored in the second quarter?",
+                "answer": {
+                    "number": "3",
+                    "date": {
+                        "day": "",
+                        "month": "",
+                        "year": ""
+                    },
+                    "spans": []
+                },
+                "query_id": "c93cd84b-d76c-48e3-b73b-ef1d67003e4b",
+                "highlights": [],
+                "question_type": []
+            }
+        ],
+        "wiki_url": "https://en.wikipedia.org/wiki/2014_Cleveland_Browns"
+    },
+    "nfl_478": {
+        "passage": "Trying to snap a two-game skid, the Bills flew to Gillette Stadium for a Week 3 divisional fight with the New England Patriots.  In the first quarter, QB J. P. Losman was immediately injured on the first offensive play of the game.  He would finish the series, but ended up on the bench for the rest of the game.  After New England took the lead with kicker Stephen Gostkowski's 24-yard field goal, rookie QB Trent Edwards played the rest of the game for Buffalo.  The Bills would get their only score of the game as RB Marshawn Lynch got an 8-yard TD run, and a Rian Lindell extra point put the Bills ahead surprisingly 7-3.  However, in the second quarter, the Patriots were able to open up their running game when Bills rookie standout Paul Posluszny was lost due to a broken arm. This left passing lanes open, and for the rest of the game, the Patriots dominated. QB Tom Brady's 8-yard TD pass to TE Benjamin Watson and a 3-yard TD pass to WR Randy Moss made it 17-7 at the half.  In the third quarter, New England continued its conquest with Brady's 4-yard TD pass to WR Jabar Gaffney and RB Sammy Morris' 4-yard TD run.  In the fourth quarter, the Patriots ended the day with Brady and Moss hooking up with each other again on a 45-yard TD pass.",
+        "qa_pairs": [
+            {
+                "question": "How many field goals were in the game?",
+                "answer": {
+                    "number": "1",
+                    "date": {
+                        "day": "",
+                        "month": "",
+                        "year": ""
+                    },
+                    "spans": []
+                },
+                "query_id": "926aff87-8f52-4c37-a6e1-b9439e1b292d"
+            },
+            {
+                "question": "How many touchdowns did Randy Moss catch?",
+                "answer": {
+                    "number": "2",
+                    "date": {
+                        "day": "",
+                        "month": "",
+                        "year": ""
+                    },
+                    "spans": []
+                },
+                "query_id": "f8ab82c3-d1f4-46e7-8efd-9928d6d55b59"
+            },
+            {
+                "question": "How many touchdown passes did Brady throw in the second quarter?",
+                "answer": {
+                    "number": "2",
+                    "date": {
+                        "day": "",
+                        "month": "",
+                        "year": ""
+                    },
+                    "spans": []
+                },
+                "query_id": "c43e5838-b8d9-4ad3-92a9-5f5b0f1743df",
+                "highlights": [],
+                "question_type": []
+            },
+            {
+                "question": "How many times did the Bills score in the game?",
+                "answer": {
+                    "number": "1",
+                    "date": {
+                        "day": "",
+                        "month": "",
+                        "year": ""
+                    },
+                    "spans": []
+                },
+                "query_id": "6585df06-0312-4f15-bf64-b3f601f1f30e",
+                "highlights": [],
+                "question_type": []
+            }
+        ],
+        "wiki_url": "https://en.wikipedia.org/wiki/2014_Cleveland_Browns"
+    },
+    "history_690": {
+        "passage": "The French king, John II, had been held captive in England. The Treaty of Br\u00e9tigny set his ransom at 3\u00a0million\u00a0crowns and allowed for hostages to be held in lieu of John. The hostages included two of his sons, several princes and nobles, four inhabitants of Paris, and two citizens from each of the nineteen principal towns of France. While these hostages were held, John returned to France to try and raise funds to pay the ransom. In 1362 John's son Louis of Anjou, a hostage in English-held Calais, escaped captivity. So, with his stand-in hostage gone, John felt honor-bound to return to captivity in England. The French crown had been at odds with Navarre  since 1354, and in 1363 the Navarrese used the captivity of John II in London and the political weakness of the Dauphin to try to seize power. Although there was no formal treaty, Edward III supported the Navarrese moves, particularly as there was a prospect that he might gain control over the northern and western provinces as a consequence. With this in mind, Edward deliberately slowed the peace negotiations. In 1364, John II died in London, while still in honourable captivity. Charles V succeeded him as king of France. On 7 May 1364, one month after the dauphin's accession and three days before his coronation as Charles V, the Navarrese suffered a crushing defeat at the Battle of Cocherel.",
+        "qa_pairs": [
+            {
+                "question": "How many groups were held hostage in lieu of John II?",
+                "answer": {
+                    "number": "4",
+                    "date": {
+                        "day": "",
+                        "month": "",
+                        "year": ""
+                    },
+                    "spans": []
+                },
+                "query_id": "6b2f6674-fb72-4377-8786-b6d2723ad584"
+            }
+        ],
+        "wiki_url": "https://en.wikipedia.org/wiki/2014_Cleveland_Browns"
+    },
+    "history_1328": {
+        "passage": "From 1231, Goryeo was intermittently invaded by the Mongol Empire. During this time, Goryeo was controlled by a military regime led by the Choe family. In 1232 the government under the nominal king fled to Ganghwa Island, which Mongol horse riders were unable to land on, and resisted the Mongol invasion. Unfortunately because of its fragile foundation, Goryeo faced frequent rebellions. The 1258 rebellion resulted in the establishment of Ssangseong  and Dongnyeong Prefectures  by the Mongols. Unlike these rebels, the Sambyeolcho  were an organ of the military government. They were organized by the Choe family to maintain security. However, unlike the Choe private guards unit , the Sambyeolcho assumed public functions performed by police and combat forces, effectively replacing the Six Divisions of the military. In 1258, Choe Ui, the fourth of the Choe family, was overthrown by Kim Jun  using the Sambyeolcho. Kim Jun took a pro-Mongol policy and sent Crown Prince Wang Jeon to the Mongol Empire. At the same time, King Gojong and the crown prince approached the Mongols to restore power from Kim Jun. In 1268, however, Kim Jun was annihilated by the Sambyeolcho under the order of Im Yeon. The next year, Im Yeon's attempt to replace King Wonjong was reversed by the crown prince  with the help from the Mongol force. In 1270, Im Yeon's successor Im Yumu was killed by the pro-Mongol faction using the Sambyeolcho. It marked the end of the military regime.",
+        "qa_pairs": [
+            {
+                "question": "How many Mongol prefectures were established due to the rebellion in 1258?",
+                "answer": {
+                    "number": "2",
+                    "date": {
+                        "day": "",
+                        "month": "",
+                        "year": ""
+                    },
+                    "spans": []
+                },
+                "query_id": "94476247-8151-4400-8cbb-710f804f9f04",
+                "highlights": [],
+                "question_type": []
+            }
+        ],
+        "wiki_url": "https://en.wikipedia.org/wiki/2014_Cleveland_Browns"
+    },
+    "nfl_1820": {
+        "passage": "Hoping to break their current losing streak the Cowboys played on home ground for an Interconference duel with the Jaguars. In the first quarter the Cowboys took the lead as kicker David Buehler hit a 34-yard field goal. But they fell behind with QB David Garrard getting a 10-yard TD pass to WR Mike Sims-Walker. In the second quarter, the Cowboys struggled further with Garrard finding TE Marcedes Lewis on a 42-yard TD pass, then in the third quarter he found WR Mike Thomas on a 15-yard TD pass, and then he found Lewis again on a 9-yard TD pass. The Cowboys responded in the 4th quarter with RB Marion Barber getting a 1-yard TD run. But the Jaguars scored again with Garrard scrambling 2 yards to the endzone for a touchdown. The Cowboys replied with QB Jon Kitna making an 8-yard TD pass to TE Jason Witten.",
+        "qa_pairs": [
+            {
+                "question": "How many touchdown passes did Garrard throw?",
+                "answer": {
+                    "number": "4",
+                    "date": {
+                        "day": "",
+                        "month": "",
+                        "year": ""
+                    },
+                    "spans": []
+                },
+                "query_id": "6db50f47-c4b4-4810-8765-519b3c6e2f92"
+            },
+            {
+                "question": "How many touchdowns were scored longer than 11 yards?",
+                "answer": {
+                    "number": "2",
+                    "date": {
+                        "day": "",
+                        "month": "",
+                        "year": ""
+                    },
+                    "spans": []
+                },
+                "query_id": "6443d704-26b0-4683-81e9-75822b6d9dfd",
+                "highlights": [],
+                "question_type": [],
+                "validated_answers": [],
+                "expert_answers": []
+            },
+            {
+                "question": "How many touchdown passes between 5 and 25 yards were made?",
+                "answer": {
+                    "number": "4",
+                    "date": {
+                        "day": "",
+                        "month": "",
+                        "year": ""
+                    },
+                    "spans": []
+                },
+                "query_id": "b8ae509a-0127-4d8a-bed8-40eadbe048de",
+                "highlights": [],
+                "question_type": [],
+                "validated_answers": [],
+                "expert_answers": []
+            }
+        ],
+        "wiki_url": "https://en.wikipedia.org/wiki/2014_Cleveland_Browns"
+    },
+    "nfl_352": {
+        "passage": "San Francisco kept Detroit in the game with missed opportunities, then made just enough plays for a rare two-game winning streak and its first road win. RB Frank Gore set a franchise record with 148 yards rushing in the first half and scored on a 61-yard run before leaving with a concussion. San Francisco led 13-3 at halftime after scoring on three of its first four drives, wishing it had a bigger lead after out gaining Detroit 247-102 yards and recovering a fumble without giving up a turnover. The 49ers had chances to go ahead big in the third quarter because Detroit had two turnovers on its first three plays, but they came away with only a field goal and a 13-point lead. Gore then caught a 7-yard pass, wobbled off the field and didn't return. QB Alex Smith's fumble midway through the third quarter set up a score that helped the Lions get back in the game. The 49ers drove down the field to set up K Joe Nedney's fourth field goal, a key score because it made Detroit go for a TD instead of kicking a tying field goal late in the game. S Keith Lewis intercepted QB Jon Kitna's pass at the 49ers' 2 with 2&#189; minutes left and San Francisco now 4-5 picked up the one first down it needed to seal the game, winning consecutive games for the second time since 2003. RB Frank Gore finished with career-high 159 yards rushing and San Francisco's QB Alex Smith was 14 of 20 for 136 yards with a fumble. WR Arnaz Battle caught six passes for 55 yards, and converted a third-and-4 on the final drive to allow the 49ers to run out the clock. The 49ers' defense again came up huge, allowing only 273 total offensive yards and forcing 4 turnovers. LB Brandon Moore was yet again the story, leading the team with 9 tackles, 2 sacks and forcing 2 turnovers. With the win, the 49ers advanced to 4-5.",
+        "qa_pairs": [
+            {
+                "question": "How many interceptions were there in total?",
+                "answer": {
+                    "number": "1",
+                    "date": {
+                        "day": "",
+                        "month": "",
+                        "year": ""
+                    },
+                    "spans": []
+                },
+                "query_id": "afdd31aa-4c02-418d-870e-a8344ca577da"
+            },
+            {
+                "question": "How many fumbles did the game have in total?",
+                "answer": {
+                    "number": "3",
+                    "date": {
+                        "day": "",
+                        "month": "",
+                        "year": ""
+                    },
+                    "spans": []
+                },
+                "query_id": "63d298a2-5895-4a11-9c8e-7e780952cce0"
+            }
+        ],
+        "wiki_url": "https://en.wikipedia.org/wiki/2014_Cleveland_Browns"
+    }
+}
