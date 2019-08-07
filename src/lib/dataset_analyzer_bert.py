@@ -1,6 +1,9 @@
 from datetime import datetime
 from collections import namedtuple
 import torch
+import string
+import numpy as np
+from sklearn.decomposition import PCA
 
 from drop_bert.augmented_bert_plus import NumericallyAugmentedBERTPlus
 from drop_bert.data_processing import BertDropTokenizer, BertDropTokenIndexer, BertDropReader
@@ -91,20 +94,69 @@ def extract_instance_properties(instance):
 
     return entry
 
-def featurize_entry(entry):
 
-    return torch.tensor([
-        entry['is_answer_number'],
-        entry['is_answer_span'],
-        entry['is_answer_date'],
-        entry['is_answer_psg_span'],
-        entry['is_answer_qstn_span'],
-        entry['is_answer_counts'],
-        entry['is_answer_arithmetic'],
-        entry['question_contains_or'],
-        entry['question_about_football'],
-        entry['question_contains_percent']
-    ])
+def join_tokens_to_readable_string(tokens):
+    printable_symbols = set(string.printable)
+    full_string = ' '.join(tokens)
+    full_string = map(lambda x: x if x in printable_symbols else '*', full_string)
+    full_string = ''.join(list(full_string))
+    return full_string
+
+
+def featurize_entry(entry, question_vector, passage_vector, featureize_by='all_features'):
+
+    with torch.no_grad():
+        question_tokens_count = len(entry['question_tokens'])
+        passage_tokens_count = len(entry['passage_tokens'])
+        passage_numbers_count = len(entry['passage_numbers'])
+
+        if featureize_by == 'all_features':
+            return torch.tensor([
+                entry['is_answer_number'],
+                entry['is_answer_span'],
+                entry['is_answer_date'],
+                entry['is_answer_psg_span'],
+                entry['is_answer_qstn_span'],
+                entry['is_answer_counts'],
+                entry['is_answer_arithmetic'],
+                entry['question_contains_or'],
+                entry['question_about_football'],
+                entry['question_contains_percent'],
+                question_tokens_count,
+                passage_tokens_count,
+                passage_numbers_count
+            ])
+        elif featureize_by == 'token_count':
+            return torch.tensor([
+                question_tokens_count,
+                passage_tokens_count,
+                passage_numbers_count
+            ])
+        elif featureize_by == 'question_vec':
+            return question_vector.cpu()
+        elif featureize_by == 'passage_vec':
+            return passage_vector.cpu()
+        elif featureize_by == 'question_passage_vec':
+            return torch.cat((question_vector.cpu(), passage_vector.cpu()))
+        elif featureize_by == 'all_features_qa_vec':
+            all_features = torch.tensor([
+                entry['is_answer_number'],
+                entry['is_answer_span'],
+                entry['is_answer_date'],
+                entry['is_answer_psg_span'],
+                entry['is_answer_qstn_span'],
+                entry['is_answer_counts'],
+                entry['is_answer_arithmetic'],
+                entry['question_contains_or'],
+                entry['question_about_football'],
+                entry['question_contains_percent'],
+                question_tokens_count,
+                passage_tokens_count,
+                passage_numbers_count
+            ])
+            return torch.cat((all_features.float(), question_vector.cpu(), passage_vector.cpu()))
+        else:
+            raise ValueError('Unknown featurize_by arg')
 
 
 def load_nabert_model(weights_path):
@@ -129,11 +181,24 @@ def create_nabert_reader(data_path):
     return instances
 
 
+def pca(feature_vec):
+    X = feature_vec.cpu().numpy()
+    pca_func = PCA(n_components=25, svd_solver='auto')
+    X_pca = pca_func.fit_transform(X)
+    X_pca = torch.from_numpy(X_pca)
+    return X_pca
+
+
 model = load_nabert_model(weights_path='../results/nabert/best.th')
 instances = create_nabert_reader(data_path='../../data/drop_dataset/drop_dataset_dev.json')
 
 
-feature_vecs = []
+feature_vecs_all = []
+feature_vecs_token_count = []
+feature_question_vecs = []
+feature_passage_vecs = []
+feature_question_passage_vecs = []
+feature_vecs_all_and_qa_vecs = []
 labels = []
 InstanceLabels = namedtuple('InstanceLabels',
                             ['em_correct', 'f1_score', 'f1_correct', 'answer_types', 'answer_type_correct',
@@ -141,9 +206,7 @@ InstanceLabels = namedtuple('InstanceLabels',
 
 for instance_idx, instance in enumerate(instances):
 
-    # Extract question / answer features here
     entry = extract_instance_properties(instance)
-    feature_vec = featurize_entry(entry)
 
     # Extract labels here
     model_input = data_instance_to_model_input(instance, model)
@@ -173,19 +236,41 @@ for instance_idx, instance in enumerate(instances):
 
     answer_content = ' '.join(answer_contents) if len(answer_contents) > 0 else "None"
 
+    question_tokens = join_tokens_to_readable_string(entry['question_tokens'])
+    passage_tokens = join_tokens_to_readable_string(entry['passage_tokens'])
+    answer_texts = join_tokens_to_readable_string(entry['answer_texts'])
+
+    question_vector, passage_vector = model.extract_summary_vecs(**model_input)
+    question_vector = question_vector.squeeze()
+    passage_vector = passage_vector.squeeze()
+
     instance_labels = InstanceLabels(em_correct=em_correct_label,
                                      f1_score=f1_score_label,
                                      f1_correct=f1_correct_label,
                                      answer_types=answer_type_text,
                                      answer_type_correct=answer_type_correct,
-                                     question_tokens=' '.join(entry['question_tokens']),
-                                     answer_texts=' '.join(entry['answer_texts']),
+                                     question_tokens=question_tokens,
+                                     answer_texts=answer_texts,
                                      passage_numbers=passage_numbers,
-                                     passage_tokens=' '.join(entry['passage_tokens']),
+                                     passage_tokens=passage_tokens,
                                      answer_content=answer_content
                                      )
 
-    feature_vecs.append(feature_vec)
+    # Extract question / answer features here
+    feature_vec_all = featurize_entry(entry, question_vector, passage_vector, featureize_by='all_features')
+    feature_vec_token_count = featurize_entry(entry, question_vector, passage_vector, featureize_by='token_count')
+    feature_question_vec = featurize_entry(entry, question_vector, passage_vector, featureize_by='question_vec')
+    feature_passage_vec = featurize_entry(entry, question_vector, passage_vector, featureize_by='passage_vec')
+    feature_question_passage_vec = featurize_entry(entry, question_vector, passage_vector, featureize_by='question_passage_vec')
+    feature_all_features_qa_vec = featurize_entry(entry, question_vector, passage_vector, featureize_by='all_features_qa_vec')
+
+    feature_vecs_all.append(feature_vec_all)
+    feature_vecs_token_count.append(feature_vec_token_count)
+    feature_question_vecs.append(feature_question_vec)
+    feature_passage_vecs.append(feature_passage_vec)
+    feature_question_passage_vecs.append(feature_question_passage_vec)
+    feature_vecs_all_and_qa_vecs.append(feature_all_features_qa_vec)
+
     labels.append(tuple(instance_labels))
 
 
@@ -194,9 +279,26 @@ for instance_idx, instance in enumerate(instances):
 # tensorboard --logdir=tb_data_analysis
 # (2) Forward the display to local machine with:
 # ssh -i <PATH_TO_REMOTE_MACHINE_SSH_KEY> -N -L localhost:6006:localhost:6006 ubuntu@<REMOTE_IP>
-writer = SummaryWriter("tb_data_analysis/" + datetime.now().strftime("%Y%m%d-%H%M%S"))
-feature_vecs_tensor = torch.stack(feature_vecs)
-writer.add_embedding(feature_vecs_tensor, metadata=labels, tag='all_features', metadata_header=InstanceLabels._fields)
+writer = SummaryWriter("tb_data_analysis/nabert_" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+
+feature_vec_options = dict(all_features=feature_vecs_all,
+                           token_count_features=feature_vecs_token_count,
+                           question_vec=feature_question_vecs,
+                           passage_vec=feature_passage_vecs,
+                           question_passage_vec=feature_question_passage_vecs,
+                           all_features_qa_vec=feature_vecs_all_and_qa_vecs)
+pca_vecs = ['question_vec', 'passage_vec', 'question_passage_vec', 'all_features_qa_vec']
+
+for feature_tag, feature_vec_list in feature_vec_options.items():
+    stacked_features = torch.stack(feature_vec_list)
+    writer.add_embedding(stacked_features,
+                         metadata=labels, tag=feature_tag, metadata_header=InstanceLabels._fields)
+
+    if feature_tag in pca_vecs:
+        stacked_features_pca = pca(stacked_features)
+        writer.add_embedding(stacked_features_pca,
+                             metadata=labels, tag=feature_tag + '_pca', metadata_header=InstanceLabels._fields)
+
 writer.close()
 
 
