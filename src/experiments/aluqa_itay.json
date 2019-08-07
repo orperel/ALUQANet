@@ -25,8 +25,8 @@
         "special_numbers": [100, 1],
         "answering_abilities": ["counting"]
     },
-    "train_data_path": "../../data/drop_dataset/drop_dataset_count.json",
-    "validation_data_path": "../../data/drop_dataset/drop_dataset_count.json",
+    "train_data_path": "/home/itaysofer/Desktop/Drop/data/drop_dataset_count.json",
+    "validation_data_path": "/home/itaysofer/Desktop/Drop/data/drop_dataset_count.json",
     "trainer": {
         "cuda_device": 0,
         "num_serialized_models_to_keep": 1,
