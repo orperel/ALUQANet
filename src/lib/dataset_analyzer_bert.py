@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 
 from drop_bert.augmented_bert_plus import NumericallyAugmentedBERTPlus
 from drop_bert.data_processing import BertDropTokenizer, BertDropTokenIndexer, BertDropReader
-from src.lib.inference_utils import data_instance_to_model_input
+from src.lib.inference_utils import create_nabert_drop_reader, load_model, data_instance_to_model_input
 from torch.utils.tensorboard import SummaryWriter
 
 from allennlp.data.vocabulary import Vocabulary
@@ -159,28 +159,6 @@ def featurize_entry(entry, question_vector, passage_vector, featureize_by='all_f
             raise ValueError('Unknown featurize_by arg')
 
 
-def load_nabert_model(weights_path):
-    device_num = 0
-    device = torch.device('cuda:%d' % device_num)
-    model = NumericallyAugmentedBERTPlus(Vocabulary(), 'bert-base-uncased', special_numbers=[100, 1])
-    model.load_state_dict(torch.load(weights_path, map_location=device))
-    model.to(device)
-    model.eval()
-
-    return model
-
-
-def create_nabert_reader(data_path):
-    tokenizer = BertDropTokenizer('bert-base-uncased')
-    token_indexer = BertDropTokenIndexer('bert-base-uncased')
-    reader = BertDropReader(tokenizer, {'tokens': token_indexer},
-                            extra_numbers=[100, 1], lazy=True)
-    reader.answer_type = None
-    instances = reader.read(data_path)
-
-    return instances
-
-
 def pca(feature_vec):
     X = feature_vec.cpu().numpy()
     pca_func = PCA(n_components=25, svd_solver='auto')
@@ -189,8 +167,9 @@ def pca(feature_vec):
     return X_pca
 
 
-model = load_nabert_model(weights_path='../results/nabert/best.th')
-instances = create_nabert_reader(data_path='../../data/drop_dataset/drop_dataset_dev.json')
+model, config = load_model(model_path='../results/nabert/model.tar.gz',
+                           weights_path='../results/nabert/best.th')
+instances = create_nabert_drop_reader(config, data_split='dev', lazy=True)
 
 
 feature_vecs_all = []

@@ -140,6 +140,54 @@ class NumericallyAugmentedBERTPlus(Model):
         self.ops = ["END", "+", "-", "*", "/", "100"]
         self.END = 0
 
+
+    def extract_summary_vecs(self,  # type: ignore
+                             question_passage: Dict[str, torch.LongTensor],
+                             number_indices: torch.LongTensor,
+                             mask_indices: torch.LongTensor,
+                             num_spans: torch.LongTensor = None,
+                             answer_as_passage_spans: torch.LongTensor = None,
+                             answer_as_question_spans: torch.LongTensor = None,
+                             answer_as_expressions: torch.LongTensor = None,
+                             answer_as_expressions_extra: torch.LongTensor = None,
+                             answer_as_counts: torch.LongTensor = None,
+                             metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
+        # pylint: disable=arguments-differ
+        # Shape: (batch_size, seqlen)
+        question_passage_tokens = question_passage["tokens"]
+        # Shape: (batch_size, seqlen)
+        pad_mask = question_passage["mask"]
+        # Shape: (batch_size, seqlen)
+        seqlen_ids = question_passage["tokens-type-ids"]
+
+        # Shape: (batch_size, 3)
+        mask = mask_indices.squeeze(-1)
+        # Shape: (batch_size, seqlen)
+        cls_sep_mask = \
+            torch.ones(pad_mask.shape, device=pad_mask.device).long().scatter(1, mask, torch.zeros(mask.shape,
+                                                                                                   device=mask.device).long())
+        # Shape: (batch_size, seqlen)
+        passage_mask = seqlen_ids * pad_mask * cls_sep_mask
+        # Shape: (batch_size, seqlen)
+        question_mask = (1 - seqlen_ids) * pad_mask * cls_sep_mask
+
+        # Shape: (batch_size, seqlen, bert_dim)
+        bert_out, _ = self.BERT(question_passage_tokens, seqlen_ids, pad_mask, output_all_encoded_layers=False)
+        # Shape: (batch_size, qlen, bert_dim)
+        question_end = max(mask[:, 1])
+        question_out = bert_out[:, :question_end]
+        # Shape: (batch_size, qlen)
+        question_mask = question_mask[:, :question_end]
+        # Shape: (batch_size, out)
+        question_vector = self.summary_vector(question_out, question_mask, "question")
+
+        passage_out = bert_out
+        del bert_out
+
+        # Shape: (batch_size, bert_dim)
+        passage_vector = self.summary_vector(passage_out, passage_mask)
+        return question_vector, passage_vector
+
     def forward(self,  # type: ignore
                 question_passage: Dict[str, torch.LongTensor],
                 number_indices: torch.LongTensor,

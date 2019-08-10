@@ -1,7 +1,7 @@
 from datetime import datetime
 from collections import namedtuple
 import torch
-from src.lib.inference_utils import create_drop_reader, load_model, data_instance_to_model_input
+from src.lib.inference_utils import create_naqanet_drop_reader, load_model, data_instance_to_model_input
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -104,7 +104,7 @@ def featurize_entry(entry):
 
 model, config = load_model(model_path='../results/naqanet_single_epoch/model.tar.gz',
                            weights_path='../results/naqanet/best.th')
-instances = create_drop_reader(config, data_split='dev', lazy=True)
+instances = create_naqanet_drop_reader(config, data_split='dev', lazy=True)
 
 feature_vecs = []
 labels = []

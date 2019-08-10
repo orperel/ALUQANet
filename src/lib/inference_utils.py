@@ -14,7 +14,7 @@ def load_model(model_path, weights_path):
     return model, config
 
 
-def create_drop_reader(config, data_split='dev', lazy=True):
+def create_naqanet_drop_reader(config, data_split='dev', lazy=True):
     if data_split == 'dev':
         config_params = config['validation_dataset_reader']
         data_path = "../../data/drop_dataset/drop_dataset_dev.json"
@@ -23,6 +23,21 @@ def create_drop_reader(config, data_split='dev', lazy=True):
         data_path = "../../data/drop_dataset/drop_dataset_train.json"
     else:
         raise ValueError(f'Unsupported datasplit {data_split}, please use "dev" or "train"')
+
+    data_reader = DatasetReader.from_params(config_params)
+    data_reader.lazy = lazy
+    instances = data_reader.read(data_path)
+    return instances
+
+def create_nabert_drop_reader(config, data_split='dev', lazy=True):
+    if data_split == 'dev':
+        data_path = "../../data/drop_dataset/drop_dataset_dev.json"
+    elif data_split == 'train':
+        data_path = "../../data/drop_dataset/drop_dataset_train.json"
+    else:
+        raise ValueError(f'Unsupported datasplit {data_split}, please use "dev" or "train"')
+
+    config_params = config['dataset_reader']
 
     data_reader = DatasetReader.from_params(config_params)
     data_reader.lazy = lazy
