@@ -130,7 +130,11 @@ for instance_idx, instance in enumerate(instances):
     entry = extract_instance_properties(instance)
 
     question_tokens = join_tokens_to_readable_string(entry['question_tokens'])
-    all_question.append(instance.fields['metadata'].metadata)
+    passage_tokens = join_tokens_to_readable_string(entry['passage_tokens'])
+    sample = {"question_tokens": question_tokens,
+              "passage_tokens": passage_tokens}
+
+    all_question.append(sample)
 
     # nabertplus
     model_input = data_instance_to_model_input(instance, nabertplus_model)
@@ -139,7 +143,7 @@ for instance_idx, instance in enumerate(instances):
     metric = nabertplus_model.get_metrics(reset=True)
     em_correct_label = int(metric['em'])
     if em_correct_label == 1:
-        nabertplus_correct.append(instance.fields['metadata'].metadata)
+        nabertplus_correct.append(sample)
 
 
     # aluqa
@@ -149,7 +153,7 @@ for instance_idx, instance in enumerate(instances):
     metric = aluqa_model.get_metrics(reset=True)
     em_correct_label = int(metric['em'])
     if em_correct_label == 1:
-        aluqa_correct.append(instance.fields['metadata'].metadata)
+        aluqa_correct.append(sample)
 
 
 nabertplus_correct_only = [item for item in nabertplus_correct if item not in aluqa_correct]
