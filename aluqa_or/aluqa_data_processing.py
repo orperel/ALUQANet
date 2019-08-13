@@ -115,11 +115,16 @@ class BertDropReader(DatasetReader):
         with open(file_path) as dataset_file:
             dataset = json.load(dataset_file)
             
-        instances = []
+        passage_count = 0
+        count_questions_prefixes = ["how many field goal", "how many touchdown", "how many pass", "how many times",
+                                    "how many interception", "how many win", "how many of the"]
         for passage_id, passage_info in tqdm(dataset.items()):
 
-            passage_text = passage_info["passage"].strip()
+            # passage_count += 1
+            # if passage_count > 30:
+            #     break
 
+            passage_text = passage_info["passage"].strip()
             passages_sentences = self.sentence_tokenizer.split_sentences(passage_text)
             numbers_in_passage = []
             number_indices = []
@@ -159,6 +164,8 @@ class BertDropReader(DatasetReader):
             for question_answer in passage_info["qa_pairs"]:
                 question_id = question_answer["query_id"]
                 question_text = question_answer["question"].strip()
+                if not any(question_text.lower().startswith(prefix) for prefix in count_questions_prefixes):
+                    continue
                 answer_annotations = []
                 if "answer" in question_answer:
                     if self.answer_type is not None and get_answer_type(question_answer['answer']) not in self.answer_type:
@@ -179,8 +186,7 @@ class BertDropReader(DatasetReader):
                                                  passage_id,
                                                  answer_annotations)
                 if instance is not None:
-                    instances.append(instance)
-        return instances
+                    yield instance
                 
     @overrides
     def text_to_instance(self, 
@@ -203,8 +209,12 @@ class BertDropReader(DatasetReader):
         plen = len(passage_tokens)
 
         question_passage_tokens = [Token('[CLS]')] + question_tokens + [Token('[SEP]')] + passage_tokens
+        question_passage_sentence_tokens = [[Token('[CLS]')] + question_tokens + [Token('[SEP]')] +
+                                   sentence_tokens + [Token('[SEP]')]
+                                   for sentence_tokens in passage_sentence_tokens]
         passage_sentence_tokens = [[Token('[CLS]')] + sentence_tokens + [Token('[SEP]')]
                                    for sentence_tokens in passage_sentence_tokens]
+
         question_passage_sentence_mask = [-1] * (qlen + 2) + sentence_indices
         if len(question_passage_tokens) > self.max_pieces - 1:
             question_passage_tokens = question_passage_tokens[:self.max_pieces - 1]
@@ -235,6 +245,8 @@ class BertDropReader(DatasetReader):
         fields["sentences_mask"] = ArrayField(np.array(question_passage_sentence_mask), padding_value=-1)
         fields["sentences_tokens"] = ListField([TextField(sentence_tokens, self.token_indexers)
                                                 for sentence_tokens in passage_sentence_tokens])
+        fields["question_sentences_tokens"] = ListField([TextField(q_sentence_tokens, self.token_indexers)
+                                                         for q_sentence_tokens in question_passage_sentence_tokens])
 
         number_token_indices = \
             [ArrayField(np.arange(start_ind, start_ind + number_len[i]), padding_value=-1) 

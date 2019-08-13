@@ -12,6 +12,7 @@ from allennlp.nn.util import masked_softmax
 from allennlp.training.metrics.drop_em_and_f1 import DropEmAndF1
 from pytorch_pretrained_bert import BertModel, BertTokenizer
 import pickle
+import aluqa_or.loss_utils as loss_utils
 
 from drop_bert.nhelpers import tokenlist_to_passage, beam_search, evaluate_postfix
 
@@ -86,10 +87,20 @@ class NumericallyAugmentedBERTALUQA(Model):
 
         if "counting" in self.answering_abilities:
             self._counting_index = self.answering_abilities.index("counting")
-            # self._count_number_predictor = \
-            #     self.ff(bert_dim, bert_dim, max_count + 1)
+
+            # Original
             self._count_number_predictor = \
-                self.ff(2 * bert_dim, bert_dim, 1)
+                self.ff(bert_dim, bert_dim, max_count + 1)
+
+            # Regression
+            # self._count_number_predictor = \
+            #     self.ff(2 * bert_dim, bert_dim, 1)
+
+            # CE: Weighted average
+            # self._count_number_predictor = \
+            #     self.ff(2 * bert_dim, bert_dim, max_count + 1)
+
+            self.count_classes = torch.arange(max_count + 1).float()
 
         self._drop_metrics = DropEmAndF1()
         initializer(self)
@@ -197,13 +208,13 @@ class NumericallyAugmentedBERTALUQA(Model):
         passage_vector = self.summary_vector(passage_out, passage_mask)
         return question_vector, passage_vector
 
-    def extract_sentence_embeddings(self, sentences_tokens_entry):
-        sentences_tokens = sentences_tokens_entry["tokens"]
-        # Shape: (batch_size, sentence_count, seqlen) - 1 for all passage tokens, 0 for padding
-        pad_mask = sentences_tokens_entry["mask"]
+    def extract_sentence_embeddings(self, question_sentences_tokens):
+        sentences_tokens = question_sentences_tokens["tokens"]
+        # Shape: (batch_size, sentence_count, seqlen) - 1 for all real tokens, 0 for padding
+        pad_mask = question_sentences_tokens["mask"]
 
-        # Shape: (batch_size, seqlen) - always 0
-        seqlen_ids = sentences_tokens_entry["tokens-type-ids"]
+        # Shape: (batch_size, seqlen) - 0 for [CLS] question [SEP] and 1 for sentence [SEP]
+        seqlen_ids = question_sentences_tokens["tokens-type-ids"]
 
         # Store original dimensions
         max_seqlen = sentences_tokens.shape[-1]
@@ -214,7 +225,10 @@ class NumericallyAugmentedBERTALUQA(Model):
         # pad_mask: 1 for real tokens, 0 for padding
         sentences_tokens = sentences_tokens.reshape(-1, max_seqlen)
         pad_mask_flat = pad_mask.reshape(-1, max_seqlen)
-        bert_out, _ = self.BERT(sentences_tokens, token_type_ids=None, attention_mask=pad_mask_flat, output_all_encoded_layers=False)
+        seqlen_ids_flat = seqlen_ids.reshape(-1, max_seqlen)
+
+        bert_out, _ = self.BERT(sentences_tokens, token_type_ids=seqlen_ids_flat,
+                                attention_mask=pad_mask_flat, output_all_encoded_layers=False)
 
         # Shape: (batch_size, sentence_count, max_seq, bert_dim)
         bert_out = bert_out.reshape(batch_size, sentence_count, max_seqlen, -1)
@@ -225,6 +239,9 @@ class NumericallyAugmentedBERTALUQA(Model):
         sep_indices = sep_indices.unsqueeze(-1)  # Contains indices of [SEP]
         pad_mask_flat[:, 0] = 0     # Zero out [CLS]
         pad_mask_flat.scatter_(dim=1, index=sep_indices, src=torch.zeros_like(sep_indices))  # Zero out [SEP]
+
+        if torch.sum(seqlen_ids_flat) > 0:  # Question | Sentence embedding, vs just Sentence
+            pad_mask_flat *= seqlen_ids_flat
         pad_mask = pad_mask_flat.reshape(batch_size, sentence_count, max_seqlen)
 
         return bert_out, pad_mask
@@ -233,6 +250,7 @@ class NumericallyAugmentedBERTALUQA(Model):
                 question_passage: Dict[str, torch.LongTensor],
                 sentences_mask: torch.LongTensor,
                 sentences_tokens: torch.LongTensor,
+                question_sentences_tokens: torch.LongTensor,
                 number_indices: torch.LongTensor,
                 mask_indices: torch.LongTensor,
                 num_spans: torch.LongTensor = None,
@@ -242,12 +260,6 @@ class NumericallyAugmentedBERTALUQA(Model):
                 answer_as_expressions_extra: torch.LongTensor = None,
                 answer_as_counts: torch.LongTensor = None,
                 metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
-
-        # Contains a single summary vec for each sentence (weighted sum of bert embeddings)
-        # Shape: (batch_size, sentence_count, bert_dim)
-        with torch.no_grad():
-            sentences_embeddings, sentences_embedding_mask = self.extract_sentence_embeddings(sentences_tokens)
-        sentences_summary_vecs = self.summary_vector(sentences_embeddings, sentences_embedding_mask, "sentence")
 
         # pylint: disable=arguments-differ
         # Shape: (batch_size, seqlen) - all questions and passage tokens
@@ -269,6 +281,12 @@ class NumericallyAugmentedBERTALUQA(Model):
         passage_mask = seqlen_ids * pad_mask * cls_sep_mask
         # Shape: (batch_size, seqlen) -1 for all question tokens excluding [CLS], [SEP], 0 for others
         question_mask = (1 - seqlen_ids) * pad_mask * cls_sep_mask
+
+        # Contains a single summary vec for each sentence (weighted sum of bert embeddings)
+        # Shape: (batch_size, sentence_count, bert_dim)
+        with torch.no_grad():
+            sentences_embeddings, sentences_embedding_mask = self.extract_sentence_embeddings(question_sentences_tokens)
+        sentences_summary_vecs = self.summary_vector(sentences_embeddings, sentences_embedding_mask, "sentence")
 
         # Shape: (batch_size, seqlen, bert_dim) ; self.BERT is a BertModel
         # seqlen_ids: mask of Sentence A - 0, Sentence B - 1
@@ -314,8 +332,11 @@ class NumericallyAugmentedBERTALUQA(Model):
             best_answer_ability = torch.argmax(answer_ability_log_probs, 1)
 
         if "counting" in self.answering_abilities:
-            # count_number_log_probs, best_count_number = self._count_module(passage_vector)
-            count_number_regression, best_count_number = self._count_module_per_sentence(passage_vector, sentences_summary_vecs)
+            count_number, best_count_number = self._count_module(passage_vector)
+            # count_number, select_probs = self._count_module_per_sentence(passage_vector, sentences_summary_vecs)
+            # answer_as_counts = answer_as_counts.squeeze(1)
+            # gold_count_mask = (answer_as_counts != -1).long()
+            # count_number = util.replace_masked_values(count_number, gold_count_mask, 0)
 
         if "passage_span_extraction" in self.answering_abilities:
             passage_span_start_log_probs, passage_span_end_log_probs, best_passage_span = \
@@ -342,68 +363,70 @@ class NumericallyAugmentedBERTALUQA(Model):
         output_dict = {}
         del passage_out, question_out
         # If answer is given, compute the loss.
-        if answer_as_passage_spans is not None or answer_as_question_spans is not None \
-                or answer_as_expressions is not None or answer_as_counts is not None:
+        # if answer_as_passage_spans is not None or answer_as_question_spans is not None \
+        #         or answer_as_expressions is not None or answer_as_counts is not None:
+        #
+        #     log_marginal_likelihood_list = []
+        #     regression_loss = []
+        #
+        #     for answering_ability in self.answering_abilities:
+        #         if answering_ability == "passage_span_extraction":
+        #             log_marginal_likelihood_for_passage_span = \
+        #                 self._passage_span_log_likelihood(answer_as_passage_spans,
+        #                                                   passage_span_start_log_probs,
+        #                                                   passage_span_end_log_probs)
+        #             log_marginal_likelihood_list.append(log_marginal_likelihood_for_passage_span)
+        #
+        #         elif answering_ability == "question_span_extraction":
+        #             log_marginal_likelihood_for_question_span = \
+        #                 self._question_span_log_likelihood(answer_as_question_spans,
+        #                                                    question_span_start_log_probs,
+        #                                                    question_span_end_log_probs)
+        #             log_marginal_likelihood_list.append(log_marginal_likelihood_for_question_span)
+        #
+        #         elif answering_ability == "arithmetic":
+        #             if self.arithmetic == "base":
+        #                 log_marginal_likelihood_for_arithmetic = \
+        #                     self._base_arithmetic_log_likelihood(answer_as_expressions,
+        #                                                          number_sign_log_probs,
+        #                                                          number_mask,
+        #                                                          answer_as_expressions_extra)
+        #             else:
+        #                 max_explen = answer_as_expressions.shape[-1]
+        #                 possible_exps = answer_as_expressions.shape[1]
+        #                 limit = min(possible_exps, 1000)
+        #                 log_marginal_likelihood_for_arithmetic = \
+        #                     self._adv_arithmetic_log_likelihood(arithmetic_logits[:,:max_explen,:],
+        #                                                         answer_as_expressions[:,:limit,:].long())
+        #             log_marginal_likelihood_list.append(log_marginal_likelihood_for_arithmetic)
+        #
+        #         elif answering_ability == "counting":
+        #             regression_loss_for_count, best_count_number = \
+        #                 self._count_regression(answer_as_counts, count_number_regression)
+        #             regression_loss.append(regression_loss_for_count)
+        #             # TODO: This is wrong
+        #             log_marginal_likelihood_list.append(torch.tensor([-1e-7] * batch_size, device=regression_loss_for_count.device))
+        #
+        #         else:
+        #             raise ValueError(f"Unsupported answering ability: {answering_ability}")
+        #
+        #     if len(self.answering_abilities) > 1:
+        #         # Add the ability probabilities if there are more than one abilities
+        #         all_log_marginal_likelihoods = torch.stack(log_marginal_likelihood_list, dim=-1)
+        #         all_log_marginal_likelihoods = all_log_marginal_likelihoods + answer_ability_log_probs
+        #         marginal_log_likelihood = util.logsumexp(all_log_marginal_likelihoods)
+        #
+        #         if len(regression_loss) > 0:
+        #             marginal_log_likelihood -= regression_loss[0]
+        #     else:
+        #         if len(regression_loss) > 0:
+        #             marginal_log_likelihood = -regression_loss[0]
+        #         else:
+        #             marginal_log_likelihood = log_marginal_likelihood_list[0]   # TODO: Handle
 
-            log_marginal_likelihood_list = []
-            regression_loss = []
+        output_dict["loss"] = -self._count_module(passage_vector)[0].mean()
+        # output_dict["loss"] = loss_utils.count_loss(answer_as_counts, count_number, select_probs, passage_mask)
 
-            for answering_ability in self.answering_abilities:
-                if answering_ability == "passage_span_extraction":
-                    log_marginal_likelihood_for_passage_span = \
-                        self._passage_span_log_likelihood(answer_as_passage_spans,
-                                                          passage_span_start_log_probs,
-                                                          passage_span_end_log_probs)
-                    log_marginal_likelihood_list.append(log_marginal_likelihood_for_passage_span)
-
-                elif answering_ability == "question_span_extraction":
-                    log_marginal_likelihood_for_question_span = \
-                        self._question_span_log_likelihood(answer_as_question_spans,
-                                                           question_span_start_log_probs,
-                                                           question_span_end_log_probs)
-                    log_marginal_likelihood_list.append(log_marginal_likelihood_for_question_span)
-
-                elif answering_ability == "arithmetic":
-                    if self.arithmetic == "base":
-                        log_marginal_likelihood_for_arithmetic = \
-                            self._base_arithmetic_log_likelihood(answer_as_expressions,
-                                                                 number_sign_log_probs,
-                                                                 number_mask,
-                                                                 answer_as_expressions_extra)
-                    else:
-                        max_explen = answer_as_expressions.shape[-1]
-                        possible_exps = answer_as_expressions.shape[1]
-                        limit = min(possible_exps, 1000)
-                        log_marginal_likelihood_for_arithmetic = \
-                            self._adv_arithmetic_log_likelihood(arithmetic_logits[:,:max_explen,:],
-                                                                answer_as_expressions[:,:limit,:].long())
-                    log_marginal_likelihood_list.append(log_marginal_likelihood_for_arithmetic)
-
-                elif answering_ability == "counting":
-                    regression_loss_for_count, best_count_number = \
-                        self._count_regression(answer_as_counts, count_number_regression)
-                    regression_loss.append(regression_loss_for_count)
-                    # TODO: This is wrong
-                    log_marginal_likelihood_list.append(torch.tensor([-1e-7] * batch_size, device=regression_loss_for_count.device))
-
-                else:
-                    raise ValueError(f"Unsupported answering ability: {answering_ability}")
-
-            if len(self.answering_abilities) > 1:
-                # Add the ability probabilities if there are more than one abilities
-                all_log_marginal_likelihoods = torch.stack(log_marginal_likelihood_list, dim=-1)
-                all_log_marginal_likelihoods = all_log_marginal_likelihoods + answer_ability_log_probs
-                marginal_log_likelihood = util.logsumexp(all_log_marginal_likelihoods)
-
-                if len(regression_loss) > 0:
-                    marginal_log_likelihood -= regression_loss[0]
-            else:
-                if len(regression_loss) > 0:
-                    marginal_log_likelihood = -regression_loss[0]
-                else:
-                    marginal_log_likelihood = log_marginal_likelihood_list[0]   # TODO: Handle
-
-            output_dict["loss"] = - marginal_log_likelihood.mean()
         with torch.no_grad():
             # Compute the metrics and add the tokenized input to the output.
             if metadata is not None:
@@ -439,7 +462,7 @@ class NumericallyAugmentedBERTALUQA(Model):
                     elif predicted_ability_str == "counting":
                         answer_json["answer_type"] = "count"
                         answer_json["value"], answer_json["count"] = \
-                            self._count_prediction(best_count_number[i])
+                            self._count_prediction(count_number[i])
                     else:
                         raise ValueError(f"Unsupported answer ability: {predicted_ability_str}")
 
@@ -583,12 +606,15 @@ class NumericallyAugmentedBERTALUQA(Model):
         tiled_passage_vector = passage_vector.unsqueeze(1).repeat(1, sentences_count, 1)
         sentence_keys = torch.cat([tiled_passage_vector, sentences_vectors], -1)
         count_number_per_sentence = self._count_number_predictor(sentence_keys)
-        count_number_per_sentence *= valid_sentences_mask.float()
+
+        count_probabilities = util.masked_softmax(count_number_per_sentence, mask=valid_sentences_mask)
+        count_classes = self.count_classes.to(count_probabilities.device)
+        expected_count_per_sentence = torch.sum(count_probabilities * count_classes, dim=2)
+        total_count_per_question = torch.sum(expected_count_per_sentence, dim=1)
+
         # Info about the best count number prediction
         # Shape: (batch_size,)
-        return count_number_per_sentence, None
-
-
+        return total_count_per_question, count_probabilities
 
     def _count_log_likelihood(self, answer_as_counts, count_number_log_probs):
         # Count answers are padded with label -1,
