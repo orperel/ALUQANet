@@ -31,7 +31,7 @@
         ],
         "answering_abilities": ["counting"],
         "experimental_mode": "expected_count_per_sentence",
-        "entropy_loss_weight": 7.0
+        "entropy_loss_weight": 10.0
     },
     "train_data_path": "data/drop_dataset/drop_dataset_train.json",
     "validation_data_path": "data/drop_dataset/drop_dataset_dev.json",
