@@ -51,3 +51,15 @@ def data_instance_to_model_input(instance, model):
     cuda_device = model._get_prediction_device()
     model_input = move_to_device(dataset.as_tensor_dict(), cuda_device=cuda_device)
     return model_input
+
+
+def filter_count_questions(question_text, answer_text):
+    """ Return True for instances that should pass the filter, and False for those that should be eliminated """
+
+    count_questions_prefixes = ["how many field goal", "how many touchdown", "how many pass", "how many times",
+                                "how many interception", "how many win", "how many of the"]
+
+    if not any(question_text.lower().startswith(prefix) for prefix in count_questions_prefixes):
+        return False
+
+    return True

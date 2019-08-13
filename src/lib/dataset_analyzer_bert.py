@@ -178,79 +178,96 @@ feature_question_vecs = []
 feature_passage_vecs = []
 feature_question_passage_vecs = []
 feature_vecs_all_and_qa_vecs = []
+bert_question_features = [[] for _ in range(12)]
+bert_passage_features = [[] for _ in range(12)]
 labels = []
 InstanceLabels = namedtuple('InstanceLabels',
-                            ['em_correct', 'f1_score', 'f1_correct', 'answer_types', 'answer_type_correct',
+                            ['em_correct', 'f1_score', 'f1_correct', 'count_prediction',
+                             'answer_types', 'answer_type_correct',
                              'question_tokens', 'answer_texts', 'passage_numbers', 'passage_tokens', 'answer_content'])
 
-for instance_idx, instance in enumerate(instances):
+with torch.no_grad():
+    for instance_idx, instance in enumerate(instances):
 
-    entry = extract_instance_properties(instance)
+        entry = extract_instance_properties(instance)
 
-    # Extract labels here
-    model_input = data_instance_to_model_input(instance, model)
-    prediction = model(**model_input)
+        if not filter_count_questions(question_text=' '.join(entry['question_tokens']), answer_text=entry['answer_texts']):
+            continue
 
-    metric = model.get_metrics(reset=True)
-    em_correct_label = int(metric['em'])
+        # Extract labels here
+        model_input = data_instance_to_model_input(instance, model)
+        prediction = model(**model_input)
 
-    f1_threshold = 0.8
-    f1_score = metric['f1']
-    f1_score_label = '%.2f' % f1_score
-    f1_correct_label = 1 if f1_score > f1_threshold else 0
+        metric = model.get_metrics(reset=True)
+        em_correct_label = int(metric['em'])
 
-    answer_types = get_instance_answer_types(instance)
-    answer_type_correct = 1 if prediction["answer"][0]["answer_type"] in answer_types else 0
-    answer_type_text = ' '.join(answer_types) if len(answer_types) > 0 else "None"
+        f1_threshold = 0.8
+        f1_score = metric['f1']
+        f1_score_label = '%.2f' % f1_score
+        f1_correct_label = 1 if f1_score > f1_threshold else 0
 
-    passage_numbers = ' '.join([str(num) for num in entry['passage_numbers']]) if len(entry['passage_numbers']) > 0 else "None"
+        answer_types = get_instance_answer_types(instance)
+        answer_type_correct = 1 if prediction["answer"][0]["answer_type"] in answer_types else 0
+        answer_type_text = ' '.join(answer_types) if len(answer_types) > 0 else "None"
 
-    answer_contents = []
-    if entry['is_answer_number']:
-        answer_contents.append("number")
-    if entry['is_answer_span']:
-        answer_contents.append("span")
-    if entry['is_answer_date']:
-        answer_contents.append("date")
+        count_prediction_label = [ans['value'] for ans in prediction['answer'] if ans['answer_type'] == 'count']
+        count_prediction_label = count_prediction_label[0] if len(count_prediction_label) > 0 else None
 
-    answer_content = ' '.join(answer_contents) if len(answer_contents) > 0 else "None"
+        passage_numbers = ' '.join([str(num) for num in entry['passage_numbers']]) if len(entry['passage_numbers']) > 0 else "None"
 
-    question_tokens = join_tokens_to_readable_string(entry['question_tokens'])
-    passage_tokens = join_tokens_to_readable_string(entry['passage_tokens'])
-    answer_texts = join_tokens_to_readable_string(entry['answer_texts'])
+        answer_contents = []
+        if entry['is_answer_number']:
+            answer_contents.append("number")
+        if entry['is_answer_span']:
+            answer_contents.append("span")
+        if entry['is_answer_date']:
+            answer_contents.append("date")
 
-    question_vector, passage_vector = model.extract_summary_vecs(**model_input)
-    question_vector = question_vector.squeeze()
-    passage_vector = passage_vector.squeeze()
+        answer_content = ' '.join(answer_contents) if len(answer_contents) > 0 else "None"
 
-    instance_labels = InstanceLabels(em_correct=em_correct_label,
-                                     f1_score=f1_score_label,
-                                     f1_correct=f1_correct_label,
-                                     answer_types=answer_type_text,
-                                     answer_type_correct=answer_type_correct,
-                                     question_tokens=question_tokens,
-                                     answer_texts=answer_texts,
-                                     passage_numbers=passage_numbers,
-                                     passage_tokens=passage_tokens,
-                                     answer_content=answer_content
-                                     )
+        question_tokens = join_tokens_to_readable_string(entry['question_tokens'])
+        passage_tokens = join_tokens_to_readable_string(entry['passage_tokens'])
+        answer_texts = join_tokens_to_readable_string(entry['answer_texts'])
 
-    # Extract question / answer features here
-    feature_vec_all = featurize_entry(entry, question_vector, passage_vector, featureize_by='all_features')
-    feature_vec_token_count = featurize_entry(entry, question_vector, passage_vector, featureize_by='token_count')
-    feature_question_vec = featurize_entry(entry, question_vector, passage_vector, featureize_by='question_vec')
-    feature_passage_vec = featurize_entry(entry, question_vector, passage_vector, featureize_by='passage_vec')
-    feature_question_passage_vec = featurize_entry(entry, question_vector, passage_vector, featureize_by='question_passage_vec')
-    feature_all_features_qa_vec = featurize_entry(entry, question_vector, passage_vector, featureize_by='all_features_qa_vec')
+        question_vectors, passage_vectors = model.extract_summary_vecs(**model_input)
+        question_vector = question_vectors[-1]
+        passage_vector = passage_vectors[-1]
+        question_vector = question_vector.squeeze()
+        passage_vector = passage_vector.squeeze()
 
-    feature_vecs_all.append(feature_vec_all)
-    feature_vecs_token_count.append(feature_vec_token_count)
-    feature_question_vecs.append(feature_question_vec)
-    feature_passage_vecs.append(feature_passage_vec)
-    feature_question_passage_vecs.append(feature_question_passage_vec)
-    feature_vecs_all_and_qa_vecs.append(feature_all_features_qa_vec)
+        instance_labels = InstanceLabels(em_correct=em_correct_label,
+                                         f1_score=f1_score_label,
+                                         f1_correct=f1_correct_label,
+                                         count_prediction=count_prediction_label,
+                                         answer_types=answer_type_text,
+                                         answer_type_correct=answer_type_correct,
+                                         question_tokens=question_tokens,
+                                         answer_texts=answer_texts,
+                                         passage_numbers=passage_numbers,
+                                         passage_tokens=passage_tokens,
+                                         answer_content=answer_content
+                                         )
 
-    labels.append(tuple(instance_labels))
+        # Extract question / answer features here
+        feature_vec_all = featurize_entry(entry, question_vector, passage_vector, featureize_by='all_features')
+        feature_vec_token_count = featurize_entry(entry, question_vector, passage_vector, featureize_by='token_count')
+        feature_question_vec = featurize_entry(entry, question_vector, passage_vector, featureize_by='question_vec')
+        feature_passage_vec = featurize_entry(entry, question_vector, passage_vector, featureize_by='passage_vec')
+        feature_question_passage_vec = featurize_entry(entry, question_vector, passage_vector, featureize_by='question_passage_vec')
+        feature_all_features_qa_vec = featurize_entry(entry, question_vector, passage_vector, featureize_by='all_features_qa_vec')
+
+        feature_vecs_all.append(feature_vec_all)
+        feature_vecs_token_count.append(feature_vec_token_count)
+        feature_question_vecs.append(feature_question_vec)
+        feature_passage_vecs.append(feature_passage_vec)
+        feature_question_passage_vecs.append(feature_question_passage_vec)
+        feature_vecs_all_and_qa_vecs.append(feature_all_features_qa_vec)
+
+        for bert_layer_num in range(12):
+            bert_question_features[bert_layer_num].append(question_vectors[bert_layer_num])
+            bert_passage_features[bert_layer_num].append(passage_vectors[bert_layer_num])
+
+        labels.append(tuple(instance_labels))
 
 
 # Writer will output to ./tb_data_analysis/ directory
@@ -266,7 +283,12 @@ feature_vec_options = dict(all_features=feature_vecs_all,
                            passage_vec=feature_passage_vecs,
                            question_passage_vec=feature_question_passage_vecs,
                            all_features_qa_vec=feature_vecs_all_and_qa_vecs)
-pca_vecs = ['question_vec', 'passage_vec', 'question_passage_vec', 'all_features_qa_vec']
+for bert_layer_num in range(12):
+    feature_vec_options['q_bert_layer_' + str(bert_layer_num + 1)] = bert_question_features[bert_layer_num]
+    feature_vec_options['p_bert_layer_' + str(bert_layer_num + 1)] = bert_passage_features[bert_layer_num]
+pca_vecs = ['question_vec', 'passage_vec', 'question_passage_vec', 'all_features_qa_vec',
+            'q_bert_layer_1', 'q_bert_layer_3', 'q_bert_layer_5', 'q_bert_layer_6', 'q_bert_layer_9', 'q_bert_layer_11',
+            'p_bert_layer_1', 'p_bert_layer_3', 'p_bert_layer_5', 'p_bert_layer_6', 'p_bert_layer_9', 'p_bert_layer_11']
 
 for feature_tag, feature_vec_list in feature_vec_options.items():
     stacked_features = torch.stack(feature_vec_list)
