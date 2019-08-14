@@ -11,6 +11,8 @@ from allennlp.nn.util import masked_softmax
 from allennlp.training.metrics.drop_em_and_f1 import DropEmAndF1
 from pytorch_pretrained_bert import BertModel, BertTokenizer
 import pickle
+from collections import defaultdict
+
 
 from termcolor import colored
 
@@ -37,7 +39,8 @@ class AluQACount(Model):
                  answering_abilities: List[str] = None,
                  number_rep: str = 'first',
                  arithmetic: str = 'base',
-                 special_numbers : List[int] = None) -> None:
+                 special_numbers : List[int] = None,
+                 count_loss_weights: List[int] = [1000, 10]) -> None:
         super().__init__(vocab, regularizer)
 
         if answering_abilities is None:
@@ -90,10 +93,15 @@ class AluQACount(Model):
             self._counting_index = self.answering_abilities.index("counting")
             self._count_number_predictor = \
                 self.ff(2*bert_dim, bert_dim, 2)
+            self._count_loss_weights = count_loss_weights
 
         self._drop_metrics = DropEmAndF1()
 
         self.huber_loss = SmoothL1Loss()
+
+        self.prob_dict = defaultdict(int)
+        self.tokens_dict = defaultdict(int)
+
         initializer(self)
 
     def summary_vector(self, encoding, mask, in_type = "passage"):
@@ -226,7 +234,13 @@ class AluQACount(Model):
             count_number = util.replace_masked_values(count_number, gold_count_mask, 0)
 
             # self.print_selection(answer_as_counts, metadata, select_probs)
+            # self.calc_selection_stat(answer_as_counts, metadata, select_probs)
 
+            # str(list(map(lambda t: (t[0] / 10, round((t[1] / float(sum(self.prob_dict.values()))) * 100)),
+            #              list(sorted(list(self.prob_dict.items()), key=lambda t: t[0])))))
+
+            # str(list(map(lambda t: (t[0], round((t[1] / float(sum(self.tokens_dict.values()))) * 100)),
+            #              list(self.tokens_dict.items()))))
 
         if "passage_span_extraction" in self.answering_abilities:
             passage_span_start_log_probs, passage_span_end_log_probs, best_passage_span = \
@@ -377,6 +391,23 @@ class AluQACount(Model):
                 if token.text == "." or token.text == "[SEP]":
                     print()
 
+
+    def calc_selection_stat(self, answer_as_counts, metadata, select_probs):
+        for i in range(answer_as_counts.size()[0]):
+            selected_indexs = list((select_probs[i] > 0.1).nonzero().squeeze(1))
+            probabilities = select_probs[i][(select_probs[i] > 0.1).nonzero().squeeze(1)].tolist()
+            for token_index, token in enumerate(metadata[i]['question_passage_tokens']):
+                if token_index in selected_indexs:
+                    self.prob_dict[round(probabilities[0] * 10)] += 1
+                    report_token = "." if token_index < len(metadata[i]['question_passage_tokens']) - 1 and\
+                                          metadata[i]['question_passage_tokens'][token_index + 1].text == "[SEP]" \
+                        else token.text
+                    self.tokens_dict[report_token] += 1
+
+                    selected_indexs.pop(0)
+                    probabilities.pop(0)
+
+
     def _passage_span_module(self, passage_out, passage_mask):
         # Shape: (batch_size, passage_length)
         passage_span_start_logits = self._passage_span_start_predictor(passage_out).squeeze(-1)
@@ -492,22 +523,22 @@ class AluQACount(Model):
         return log_marginal_likelihood_for_question_span
     
     
-    def _count_module(self, passage_out, mask, question_vector):
+    def _count_module(self, passage_out, passage_mask, question_vector):
         # if any(math.isnan(number) or math.isinf(number) for number in passage_out.view(-1).tolist()) or \
         #         any(math.isnan(number) or math.isinf(number) for number in question_vector.view(-1).tolist()):
         #     print("")
 
         # Shape: (batch_size, seq_len, 2 * bert_dim)
-        count_predictor_input = torch.cat((passage_out, question_vector.unsqueeze(1).repeat(1, passage_out.size()[1], 1)), -1)
+        count_select_predictor_input = torch.cat((passage_out, question_vector.unsqueeze(1).repeat(1, passage_out.size()[1], 1)), -1)
         # Shape: (batch_size, seq_len, 2)
-        select_logits = self._count_number_predictor(count_predictor_input)
+        select_logits = self._count_number_predictor(count_select_predictor_input)
         select_probs = torch.nn.functional.softmax(select_logits, -1)
         # Info about the best count number prediction
         # Shape: (batch_size,)
-        select_probs_masked = util.replace_masked_values(select_probs[:, :, 1], mask, 0)
+        select_probs_masked = util.replace_masked_values(select_probs[:, :, 1], passage_mask, 0)
         count_number = torch.sum(select_probs_masked, 1)
-        max_prob = torch.max(select_probs_masked[mask.byte()])
-        min_prob = torch.min(select_probs_masked[mask.byte()])
+        max_prob = torch.max(select_probs_masked[passage_mask.byte()])
+        min_prob = torch.min(select_probs_masked[passage_mask.byte()])
         return count_number, max_prob, min_prob, select_probs_masked
     
 
@@ -545,7 +576,7 @@ class AluQACount(Model):
         # if math.isnan(huber_loss.item()) or math.isnan(selection_loss.item()) or math.isnan(entropy_loss.item()):
         #     print("")
 
-        return (huber_loss) + (selection_loss * 1000) + (entropy_loss * 10)
+        return (huber_loss) + (selection_loss * self._count_loss_weights[0]) + (entropy_loss * self._count_loss_weights[1])
 
 
     def _calc_entropy_loss(self, select_probs, passage_mask):
@@ -563,7 +594,7 @@ class AluQACount(Model):
         predicted_answer = str(predicted_count)
         return predicted_answer, predicted_count
     
-    
+
     def _base_arithmetic_module(self, passage_vector, passage_out, number_indices, number_mask):
         if self.number_rep in ['average', 'attention']:
             
