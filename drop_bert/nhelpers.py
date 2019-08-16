@@ -216,6 +216,21 @@ def get_answer_type(answers):
         return 'multiple_span'
     elif any(answers['date'].values()):
         return 'date'
+
+
+count_questions_prefixes = ["how many field goal", "how many touchdown", "how many pass", "how many times",
+                            "how many interception"]
+
+
+def get_question_type(question_text, answer_type):
+    if answer_type is "number":
+        if any(question_text.lower().startswith(prefix) for prefix in count_questions_prefixes):
+            return "count"
+        else:
+            return "arithmetic"
+    else:
+        return "selection"
+
     
 def get_template_exp(numbers, targets, templates, template_strings):
     valid_expressions_indices = [[] for _ in range(len(templates))]

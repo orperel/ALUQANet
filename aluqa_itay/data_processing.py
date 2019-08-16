@@ -73,7 +73,8 @@ class BertDropReader(DatasetReader):
                  custom_word_to_num: bool = True,
                  exp_search: str = 'add_sub',
                  max_depth: int = 3,
-                 extra_numbers: List[float] = []):
+                 extra_numbers: List[float] = [],
+                 question_type: List[str] = None):
         super(BertDropReader, self).__init__(lazy)
         self.tokenizer = tokenizer
         self.token_indexers = token_indexers
@@ -88,6 +89,7 @@ class BertDropReader(DatasetReader):
         self.exp_search = exp_search
         self.max_depth = max_depth
         self.extra_numbers = extra_numbers
+        self.question_type = question_type
         self.op_dict = {'+': operator.add, '-': operator.sub, '*': operator.mul, '/': operator.truediv}
         self.operations = list(enumerate(self.op_dict.keys()))
         self.templates = [lambda x,y,z: (x + y) * z,
@@ -111,8 +113,6 @@ class BertDropReader(DatasetReader):
         with open(file_path) as dataset_file:
             dataset = json.load(dataset_file)
 
-        count_questions_prefixes = ["how many field goal", "how many touchdown", "how many pass", "how many times",
-                                    "how many interception", "how many win", "how many of the"]
         for passage_id, passage_info in tqdm(dataset.items()):
             passage_text = passage_info["passage"].strip()
             
@@ -143,11 +143,12 @@ class BertDropReader(DatasetReader):
             for question_answer in passage_info["qa_pairs"]:
                 question_id = question_answer["query_id"]
                 question_text = question_answer["question"].strip()
-                if not any(question_text.lower().startswith(prefix) for prefix in count_questions_prefixes):
-                    continue
                 answer_annotations = []
                 if "answer" in question_answer:
-                    if self.answer_type is not None and get_answer_type(question_answer['answer']) not in self.answer_type:
+                    answer_type = get_answer_type(question_answer['answer'])
+                    if self.answer_type is not None and answer_type not in self.answer_type:
+                        continue
+                    if self.question_type is not None and get_question_type(question_text, answer_type) not in self.question_type:
                         continue
                     answer_annotations.append(question_answer["answer"])
                 if self.use_validated and "validated_answers" in question_answer:
