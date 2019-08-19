@@ -21,7 +21,7 @@ from drop_bert.nhelpers import tokenlist_to_passage, beam_search, evaluate_postf
 logger = logging.getLogger(__name__)
 
 
-@Model.register("aluqa_count")
+@Model.register("aluqa_count_spans_old")
 class AluQACount(Model):
     """
     This class augments BERT with some rudimentary numerical reasoning abilities. This is based on
