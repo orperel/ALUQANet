@@ -524,10 +524,6 @@ class AluQACount(Model):
     
     
     def _count_module(self, passage_out, passage_mask, question_vector):
-        # if any(math.isnan(number) or math.isinf(number) for number in passage_out.view(-1).tolist()) or \
-        #         any(math.isnan(number) or math.isinf(number) for number in question_vector.view(-1).tolist()):
-        #     print("")
-
         # Shape: (batch_size, seq_len, 2 * bert_dim)
         count_select_predictor_input = torch.cat((passage_out, question_vector.unsqueeze(1).repeat(1, passage_out.size()[1], 1)), -1)
         # Shape: (batch_size, seq_len, 2)
@@ -572,9 +568,6 @@ class AluQACount(Model):
         selection_loss = 1 - (max_prob - min_prob)
 
         entropy_loss = self._calc_entropy_loss(select_probs, passage_mask)
-
-        # if math.isnan(huber_loss.item()) or math.isnan(selection_loss.item()) or math.isnan(entropy_loss.item()):
-        #     print("")
 
         return (huber_loss) + (selection_loss * self._count_loss_weights[0]) + (entropy_loss * self._count_loss_weights[1])
 
