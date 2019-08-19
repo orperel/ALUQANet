@@ -46,8 +46,9 @@ class PickleReader(DatasetReader):
             answer = instance.fields['metadata'].metadata['answer_annotations'][0]
             answer_type = get_answer_type(answer)
             if self.question_type is not None and get_question_type(question_text, answer_type, answer,
-                                                                    self.max_count) in self.question_type:
-                filtered_instances.append(instance)
+                                                                    self.max_count) not in self.question_type:
+                continue
+            filtered_instances.append(instance)
 
         return filtered_instances
 
