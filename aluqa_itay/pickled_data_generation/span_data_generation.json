@@ -1,0 +1,19 @@
+{
+    "dataset_reader": {
+        "type": "bert-drop",
+        "tokenizer": {
+            "type": "bert-drop",
+            "pretrained_model": "bert-base-uncased"
+        },
+        "token_indexers": {
+            "tokens": {
+                "type": "bert-drop",
+                "pretrained_model": "bert-base-uncased"
+            }   
+        },
+        "extra_numbers": [100, 1],
+        "extract_spans": true,
+        "spans_labels": ["NP"],
+        "span_max_length": 10
+    }
+}

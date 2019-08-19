@@ -23,17 +23,33 @@ from allennlp.data.tokenizers import Token, Tokenizer, WordTokenizer
 
 from pytorch_pretrained_bert import BertTokenizer
 
+from aluqa_itay.span_extractor import SpanExtractor
 from drop_bert.nhelpers import *
 
 @DatasetReader.register("pickled")
 class PickleReader(DatasetReader):
-    def __init__(self, lazy: bool = False):
+    def __init__(self,
+                 question_type: List[str] = None,
+                 max_count: int = 10,
+                 lazy: bool = False):
         super(PickleReader, self).__init__(lazy)
-    
+        self.question_type = question_type
+        self.max_count = max_count
     @overrides
     def _read(self, file_path: str):
         with open(os.path.join(file_path), 'rb') as dataset_file:
-            return pickle.load(dataset_file)
+            instances = pickle.load(dataset_file)
+
+        filtered_instances = []
+        for instance in instances:
+            question_text = instance.fields['metadata'].metadata['original_question']
+            answer = instance.fields['metadata'].metadata['answer_annotations'][0]
+            answer_type = get_answer_type(answer)
+            if self.question_type is not None and get_question_type(question_text, answer_type, answer,
+                                                                    self.max_count) in self.question_type:
+                filtered_instances.append(instance)
+
+        return filtered_instances
 
 @Tokenizer.register("bert-drop")
 class BertDropTokenizer(Tokenizer):
@@ -54,8 +70,8 @@ class BertDropTokenIndexer(WordpieceIndexer):
                          wordpiece_tokenizer=bert_tokenizer.wordpiece_tokenizer.tokenize,
                          max_pieces=max_pieces,
                          namespace="bert",
-                         separator_token="[SEP]")    
-   
+                         separator_token="[SEP]")
+
 @DatasetReader.register("bert-drop")
 class BertDropReader(DatasetReader):
     def __init__(self,
@@ -74,7 +90,10 @@ class BertDropReader(DatasetReader):
                  exp_search: str = 'add_sub',
                  max_depth: int = 3,
                  extra_numbers: List[float] = [],
-                 question_type: List[str] = None):
+                 question_type: List[str] = None,
+                 extract_spans: bool = False,
+                 spans_labels: List[str] = [],
+                 span_max_length: int = -1):
         super(BertDropReader, self).__init__(lazy)
         self.tokenizer = tokenizer
         self.token_indexers = token_indexers
@@ -90,6 +109,11 @@ class BertDropReader(DatasetReader):
         self.max_depth = max_depth
         self.extra_numbers = extra_numbers
         self.question_type = question_type
+        self.extract_spans = extract_spans
+        if self.extract_spans:
+            self.span_extractor = SpanExtractor()
+            self.spans_labels = spans_labels
+            self.span_max_length = span_max_length
         self.op_dict = {'+': operator.add, '-': operator.sub, '*': operator.mul, '/': operator.truediv}
         self.operations = list(enumerate(self.op_dict.keys()))
         self.templates = [lambda x,y,z: (x + y) * z,
@@ -113,6 +137,9 @@ class BertDropReader(DatasetReader):
         with open(file_path) as dataset_file:
             dataset = json.load(dataset_file)
 
+        instances = []
+        failed_passages = []
+
         for passage_id, passage_info in tqdm(dataset.items()):
             passage_text = passage_info["passage"].strip()
             
@@ -120,6 +147,14 @@ class BertDropReader(DatasetReader):
                 word_tokens = split_tokens_by_hyphen(self.number_tokenizer.tokenize(passage_text))
             else:
                 word_tokens = self.tokenizer.tokenize(passage_text)
+
+            try:
+                passage_spans = [] if self.extract_spans is False \
+                    else self.span_extractor.extract_passage_spans(word_tokens, self.spans_labels, self.span_max_length)
+            except:
+                failed_passages.append(passage_id)
+                continue
+
             numbers_in_passage = []
             number_indices = []
             number_words = []
@@ -131,6 +166,8 @@ class BertDropReader(DatasetReader):
                 number = self.word_to_num(token.text)
                 wordpieces = self.tokenizer.tokenize(token.text)
                 num_wordpieces = len(wordpieces)
+                if self.extract_spans and num_wordpieces > 1:
+                    passage_spans = list(map(lambda span: adapt_span_by_wordpieces(span, curr_index, num_wordpieces), passage_spans))
                 if number is not None:
                     numbers_in_passage.append(number)
                     number_indices.append(curr_index)
@@ -138,7 +175,7 @@ class BertDropReader(DatasetReader):
                     number_len.append(num_wordpieces)
                 passage_tokens += wordpieces
                 curr_index += num_wordpieces
-            
+
             # Process questions from this passage
             for question_answer in passage_info["qa_pairs"]:
                 question_id = question_answer["query_id"]
@@ -148,7 +185,7 @@ class BertDropReader(DatasetReader):
                     answer_type = get_answer_type(question_answer['answer'])
                     if self.answer_type is not None and answer_type not in self.answer_type:
                         continue
-                    if self.question_type is not None and get_question_type(question_text, answer_type) not in self.question_type:
+                    if self.question_type is not None and get_question_type(question_text, answer_type, question_answer['answer'], self.max_count) not in self.question_type:
                         continue
                     answer_annotations.append(question_answer["answer"])
                 if self.use_validated and "validated_answers" in question_answer:
@@ -156,6 +193,7 @@ class BertDropReader(DatasetReader):
                 instance = self.text_to_instance(question_text,
                                                  passage_text,
                                                  passage_tokens,
+                                                 passage_spans,
                                                  numbers_in_passage,
                                                  number_words,
                                                  number_indices,
@@ -164,16 +202,21 @@ class BertDropReader(DatasetReader):
                                                  passage_id,
                                                  answer_annotations)
                 if instance is not None:
-                    yield instance
+                    instances.append(instance)
 
-                
+        if self.extract_spans:
+            with open(file_path.slit('/')[-1].split('.')[0] + "_failed_passages.json", 'w+') as outfile:
+                json.dump(failed_passages, outfile)
+        return instances
+
     @overrides
     def text_to_instance(self, 
                          question_text: str, 
                          passage_text: str,
                          passage_tokens: List[Token],
+                         passage_spans: List[Tuple[int, int]],
                          numbers_in_passage: List[Any],
-                         number_words : List[str],
+                         number_words: List[str],
                          number_indices: List[int],
                          number_len: List[int],
                          question_id: str = None, 
@@ -202,13 +245,25 @@ class BertDropReader(DatasetReader):
         extra_number_tokens = [Token(str(num)) for num in self.extra_numbers]
         
         mask_indices = [0, qlen + 1, len(question_passage_tokens) - 1]
-        
+
+        if self.extract_spans:
+            # adapt indexes to question_passage_tokens sequence
+            passage_spans = [(span[0] + qlen + 2, span[1] + qlen + 2) for span in passage_spans]
+            # remove spans of truncated part of passage
+            passage_spans = [span for span in passage_spans if span[1] <= len(question_passage_tokens)]
+            # make span indexes inclusive
+            passage_spans = [(span[0], span[1] - 1) for span in passage_spans]
+
         fields: Dict[str, Field] = {}
             
         # Add feature fields
         question_passage_field = TextField(question_passage_tokens, self.token_indexers)
         fields["question_passage"] = question_passage_field
-       
+
+        if self.extract_spans:
+            passage_span_fields = [SpanField(span[0], span[1], question_passage_field) for span in passage_spans]
+            fields["passage_spans"] = ListField(passage_span_fields)
+
         number_token_indices = \
             [ArrayField(np.arange(start_ind, start_ind + number_len[i]), padding_value=-1) 
              for i, start_ind in enumerate(number_indices)]

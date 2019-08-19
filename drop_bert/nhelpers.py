@@ -222,9 +222,10 @@ count_questions_prefixes = ["how many field goal", "how many touchdown", "how ma
                             "how many interception"]
 
 
-def get_question_type(question_text, answer_type):
+def get_question_type(question_text, answer_type, answer, max_count):
     if answer_type is "number":
-        if any(question_text.lower().startswith(prefix) for prefix in count_questions_prefixes):
+        if any(question_text.lower().startswith(prefix) for prefix in count_questions_prefixes)\
+                and float(answer['number']) <= max_count:
             return "count"
         else:
             return "arithmetic"
@@ -246,4 +247,12 @@ def get_template_exp(numbers, targets, templates, template_strings):
             except ZeroDivisionError:
                 continue 
     return valid_expressions_indices, valid_expressions_strings
-   
+
+
+def adapt_span_by_wordpieces(span, curr_index, num_wordpieces):
+    return shift_by_wordpieces(span[0], curr_index, num_wordpieces), \
+           shift_by_wordpieces(span[1], curr_index, num_wordpieces)
+
+
+def shift_by_wordpieces(index, curr_index, num_wordpieces):
+    return index + num_wordpieces - 1 if index > curr_index else index
