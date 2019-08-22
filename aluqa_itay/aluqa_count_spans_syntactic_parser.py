@@ -40,7 +40,8 @@ class AluQACount(Model):
                  number_rep: str = 'first',
                  arithmetic: str = 'base',
                  special_numbers : List[int] = None,
-                 count_loss_weights: List[int] = [1000, 10]) -> None:
+                 count_loss_weights: List[int] = [1000, 10],
+                 selection_output_file_path: str = None) -> None:
         super().__init__(vocab, regularizer)
 
         if answering_abilities is None:
@@ -96,6 +97,7 @@ class AluQACount(Model):
             self._count_loss_weights = count_loss_weights
             self.span_extractor = SelfAttentiveSpanExtractor(input_dim=bert_dim)
 
+        self.selection_output_file_path = selection_output_file_path
         self._drop_metrics = DropEmAndF1()
 
         self.huber_loss = SmoothL1Loss()
@@ -235,7 +237,8 @@ class AluQACount(Model):
             gold_count_mask = (answer_as_counts != -1).long()
             count_number = util.replace_masked_values(count_number, gold_count_mask, 0)
 
-            # self.print_selection(answer_as_counts, metadata, select_probs)
+            if self.selection_output_file_path is not None:
+                self._print_selection(answer_as_counts, count_number, metadata, select_probs, passage_spans)
             # self.calc_selection_stat(answer_as_counts, metadata, select_probs)
 
             # str(list(map(lambda t: (t[0] / 10, round((t[1] / float(sum(self.prob_dict.values()))) * 100)),
@@ -374,24 +377,28 @@ class AluQACount(Model):
 
         return output_dict
 
-    def print_selection(self, answer_as_counts, metadata, select_probs):
-        for i in range(answer_as_counts.size()[0]):
-            print()
-            print()
-            print('Answer: ', metadata[i]['answer_texts'][0])
-            selected_indexs = list((select_probs[i] > 0.1).nonzero().squeeze(1))
-            probabilities = select_probs[i][(select_probs[i] > 0.1).nonzero().squeeze(1)].tolist()
-            for token_index, token in enumerate(metadata[i]['question_passage_tokens']):
-                if token_index in selected_indexs:
-                    print(colored(token, 'red'), " ", end='')
-                    print(colored('(' + "%.4f" % probabilities[0] + '%)', 'red'), " ", end='')
+    def _print_selection(self, answer_as_counts, count_number, metadata, select_probs, passage_spans):
+        with open(self.selection_output_file_path, 'a+') as output_file:
+            for i in range(answer_as_counts.size()[0]):
+                output_file.write('\n')
+                output_file.write('\n')
+                output_file.write(('passage: ' + metadata[i]['original_passage'] + '\n').encode(encoding='ascii', errors='ignore').decode('ascii'))
+                output_file.write(('question: ' + metadata[i]['original_question'] + '\n').encode(encoding='ascii', errors='ignore').decode('ascii'))
+                output_file.write(('gold answer: ' + metadata[i]['answer_texts'][0] + '\n').encode(encoding='ascii', errors='ignore').decode('ascii'))
+                output_file.write('model answer: ' + str(count_number[i].item()) + '\n')
 
-                    selected_indexs.pop(0)
-                    probabilities.pop(0)
-                else:
-                    print(token, " ", end='')
-                if token.text == "." or token.text == "[SEP]":
-                    print()
+                extracted_spans = [metadata[i]['question_passage_tokens'][span[0]: span[1] + 1] for span in passage_spans[i]]
+                spans_probs = [prob.item() for prob in select_probs[i]]
+                span_probs_zipped = list(zip(extracted_spans, spans_probs))
+
+                selected_spans = list(filter(lambda zipped: zipped[1] > 0.1, span_probs_zipped))
+                selected_spans = [(' '.join([token.text for token in span[0]]).replace(' ##', ''), "{:.4f}".format(span[1])) for span in selected_spans]
+
+                output_file.write('Selected spans:' + '\n')
+                for selected_span in selected_spans:
+                    output_file.write((str(selected_span) + '\n').encode(encoding='ascii', errors='ignore').decode('ascii'))
+
+
 
 
     def calc_selection_stat(self, answer_as_counts, metadata, select_probs):
