@@ -328,6 +328,9 @@ class AluQACount(Model):
         #
         #     output_dict["loss"] = - marginal_log_likelihood.mean()
 
+        # if self.training:
+        #     output_dict["loss"] = self._count_loss(answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask)
+
         output_dict["loss"] = self._count_loss(answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask)
 
         with torch.no_grad():
@@ -385,8 +388,7 @@ class AluQACount(Model):
                 output_file.write(('passage: ' + metadata[i]['original_passage'] + '\n').encode(encoding='ascii', errors='ignore').decode('ascii'))
                 output_file.write(('question: ' + metadata[i]['original_question'] + '\n').encode(encoding='ascii', errors='ignore').decode('ascii'))
                 output_file.write(('gold answer: ' + metadata[i]['answer_texts'][0] + '\n').encode(encoding='ascii', errors='ignore').decode('ascii'))
-                output_file.write('model answer: ' + str(count_number[i].item()) + '\n')
-
+                output_file.write('model answer: ' + str(round(float(count_number[i].detach().cpu().numpy()))) + '\n')
                 extracted_spans = [metadata[i]['question_passage_tokens'][span[0]: span[1] + 1] for span in passage_spans[i]]
                 spans_probs = [prob.item() for prob in select_probs[i]]
                 span_probs_zipped = list(zip(extracted_spans, spans_probs))
@@ -544,6 +546,12 @@ class AluQACount(Model):
         # Info about the best count number prediction
         # Shape: (batch_size,)
         select_probs_masked = util.replace_masked_values(select_probs[:, :, 1], span_mask, 0)
+
+        # if self.training:
+        #     count_number = torch.sum(select_probs_masked, 1)
+        # else:
+        #     count_number = (select_probs_masked > 0.9).sum(dim=1)
+
         count_number = torch.sum(select_probs_masked, 1)
         max_prob = torch.max(select_probs_masked[span_mask.byte()])
         min_prob = torch.min(select_probs_masked[span_mask.byte()])
