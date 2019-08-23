@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.decomposition import PCA
 
 from drop_bert.augmented_bert_plus import NumericallyAugmentedBERTPlus
-from aluqa.itay.aluqa_count import AluQACount
+from aluqa_itay.aluqa_count import AluQACount
 
 from drop_bert.data_processing import BertDropTokenizer, BertDropTokenIndexer, BertDropReader
 from src.lib.inference_utils import create_nabert_drop_reader, load_model, data_instance_to_model_input
