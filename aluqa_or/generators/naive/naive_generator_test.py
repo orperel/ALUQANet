@@ -1,7 +1,7 @@
 from aluqa_or.generators.naive.naive_generator import NaiveQAGenerator
 
 
-qa_generator = NaiveQAGenerator()
+qa_generator = NaiveQAGenerator(use_only_nfl_passages_as_noise=True)
 
 for idx in range(1, 200):
     question, answer, passage, \

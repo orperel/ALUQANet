@@ -10,12 +10,13 @@ PCFC_GRAMMER_PATH = 'resources/naive_golden_sentences_grammer.txt'
 
 class NaiveQAGenerator:
 
-    def __init__(self):
+    def __init__(self, use_only_nfl_passages_as_noise=True):
         ner_sampler = NERTokensGenerator(ner_frequency_table_path=NER_FREQUENCY_TABLE_PATH)
         self.questions_generator = NaiveQuestionsGenerator(ner_sampler)
         self.passages_generator = NaivePassagesGenerator(ner_sampler,
                                                          corpus_sentences_path=CONTENT_SENTENCES_CORPUS_PATH,
-                                                         pcfg_grammer_path=PCFC_GRAMMER_PATH)
+                                                         pcfg_grammer_path=PCFC_GRAMMER_PATH,
+                                                         use_only_nfl_passages_as_noise=use_only_nfl_passages_as_noise)
 
     def generate(self):
         question, question_metadata = self.questions_generator.generate_question()

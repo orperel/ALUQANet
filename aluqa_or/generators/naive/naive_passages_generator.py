@@ -9,13 +9,15 @@ from aluqa_or.generators.naive.pcfg_generator import PCFGGenerator
 class NaivePassagesGenerator:
 
     def __init__(self, ner_tokens_generator: NERTokensGenerator,
-                 corpus_sentences_path, pcfg_grammer_path):
+                 corpus_sentences_path, pcfg_grammer_path, use_only_nfl_passages_as_noise=True):
         self.ner_tokens_generator = ner_tokens_generator
 
         self.ner_tokens_generator = ner_tokens_generator
         self.corpus = self._load_corpus(corpus_sentences_path)
         self.possible_placeholders = self.ner_tokens_generator.available_ner_categories() + ['GOAL']
         self.pcfg = PCFGGenerator(pcfg_grammer_path)
+
+        self.use_only_nfl_passages_as_noise = use_only_nfl_passages_as_noise
 
     @staticmethod
     def _load_corpus(content_sentences_path):
@@ -28,6 +30,8 @@ class NaivePassagesGenerator:
 
     def _seed_passage(self):
         seeds = list(self.corpus.keys())
+        if self.use_only_nfl_passages_as_noise:
+            seeds = list(filter(lambda passage_name: passage_name.startswith('nfl'), seeds))
         passage_name = np.random.choice(seeds)
 
         return self.corpus[passage_name]
@@ -223,7 +227,7 @@ class NaivePassagesGenerator:
         for single_sentence in passage_sentences:
             if isinstance(single_sentence, tuple):
                 text = single_sentence[0]
-                passage += text
+                passage += ' ' + text
                 for span in single_sentence[2]:
                     span_start = total_accumulated_len + span[0]
                     span_end = total_accumulated_len + span[1]
@@ -231,7 +235,7 @@ class NaivePassagesGenerator:
                     passage_spans.append(passage[span_start:span_end])
             else:
                 text = single_sentence
-                passage += text
+                passage += ' ' + text
             total_accumulated_len += len(text)
 
         return passage, passage_span_indices, passage_spans, passage_metadata
