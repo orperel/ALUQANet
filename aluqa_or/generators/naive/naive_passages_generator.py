@@ -195,6 +195,7 @@ class NaivePassagesGenerator:
                                 noisy_sentences=[])
         while total_countable_entities < answer:
             golden_sentence, spans, span_indices, template_sentence = self._synthesize_golden_sentence(question_metadata)
+            golden_sentence += ' '
             if total_countable_entities + len(spans) > answer:
                 continue    # Too many spans, regenerate..
             else:
@@ -211,6 +212,7 @@ class NaivePassagesGenerator:
             for sentence_order, sentence in sentences_seed.items():
                 sentence = sentence[0]
                 filled_sentence = self._fill_sentence_with_named_entities(sentence, ner_pool)
+                filled_sentence += ' '
                 noisy_sentences.append(filled_sentence)
                 passage_metadata['template_noisy_sentences'].append(sentence)
                 passage_metadata['noisy_sentences'].append(filled_sentence)
@@ -227,7 +229,7 @@ class NaivePassagesGenerator:
         for single_sentence in passage_sentences:
             if isinstance(single_sentence, tuple):
                 text = single_sentence[0]
-                passage += ' ' + text
+                passage += text
                 for span in single_sentence[2]:
                     span_start = total_accumulated_len + span[0]
                     span_end = total_accumulated_len + span[1]
@@ -235,7 +237,7 @@ class NaivePassagesGenerator:
                     passage_spans.append(passage[span_start:span_end])
             else:
                 text = single_sentence
-                passage += ' ' + text
+                passage += text
             total_accumulated_len += len(text)
 
         return passage, passage_span_indices, passage_spans, passage_metadata

@@ -26,19 +26,38 @@ class NERTokensGenerator:
 
     def sample_semantic_quantity(self):
         ner_sample = self.sample(category='QUANTITY')
-        while not any([u in ner_sample for u in ('yard', 'points', 'meters')]):
-            ner_sample = self.sample(category='QUANTITY')
-        numbers = [int(s) for s in ner_sample.split() if s.isdigit()]
 
-        if len(numbers) == 1:
-            if any([term in ner_sample for term in ('less', 'lower', 'small', 'short', 'below')]):
-                comparators = ['<']
-            elif any([term in ner_sample for term in ('longer', 'more', 'higher', 'big', 'great', 'above')]):
-                comparators = ['>']
+        valid_sample = False
+        while not valid_sample:
+            while not any([u in ner_sample for u in ('yard', 'points', 'meters')]):
+                ner_sample = self.sample(category='QUANTITY')
+                ner_sample.replace(',', '')
+                ner_sample.replace('.', '')
+                ner_sample.replace('-', '')
+                ner_sample.replace('–', '')
+            numbers = [int(s) for s in ner_sample.split() if s.isdigit()]
+
+            if any([n > 200 for n in numbers]):
+                valid_sample = False
+                ner_sample = self.sample(category='QUANTITY')
+                continue
+
+            if len(numbers) == 1:
+                if any([term in ner_sample for term in ('less', 'lower', 'small', 'short', 'below')]):
+                    comparators = ['<']
+                    valid_sample = True
+                elif any([term in ner_sample for term in ('longer', 'more', 'higher', 'big', 'great', 'above')]):
+                    comparators = ['>']
+                    valid_sample = True
+                else:
+                    comparators = ['=']
+                    valid_sample = False
             else:
-                comparators = ['=']
-        else:
-            comparators = ['>', '<']  # Assume between
+                comparators = ['>', '<']  # Assume between
+                valid_sample = True
+
+            if not valid_sample:
+                ner_sample = self.sample(category='QUANTITY')
 
         if 'yard' in ner_sample:
             units = 'yard'
