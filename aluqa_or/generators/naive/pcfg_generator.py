@@ -4,7 +4,7 @@ from collections import defaultdict
 
 class PCFGGenerator:
 
-    def __init__(self, grammer_path='naive_golden_sentences_grammer.txt'):
+    def __init__(self, grammer_path):
         self.grammer = self._load_grammer(grammer_path)
 
     def _load_grammer(self, grammer_path):
