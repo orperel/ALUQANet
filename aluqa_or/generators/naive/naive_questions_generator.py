@@ -20,10 +20,9 @@ class NaiveQuestionsGenerator:
     @staticmethod
     def generate_countable_object_of_interest():
         AVAILABLE_COUNTABLE_OBJECTS = [
-            'goals',
-            'touchdowns',
-            'points',
-            'field goals'
+            'goal',
+            'touchdown',
+            'field goal'
         ]
 
         return np.random.choice(AVAILABLE_COUNTABLE_OBJECTS)
@@ -57,7 +56,8 @@ class NaiveQuestionsGenerator:
         if FILTER_TYPE == 'NO_FILTER':
             return '', None, None
         elif FILTER_TYPE == 'EXACT':
-            min_event_time = self.ner_tokens_generator.sample(category='ORDINAL')
+            # min_event_time = self.ner_tokens_generator.sample(category='ORDINAL')
+            min_event_time = np.random.choice(['first', 'second', 'third', 'fourth'])
             max_event_time = None
             temporal_filter = 'in the ' + min_event_time + ' quarter'
             return temporal_filter, min_event_time, max_event_time
@@ -78,7 +78,8 @@ class NaiveQuestionsGenerator:
         FILTER_TYPE = np.random.choice(('NO_FILTER', 'QUANTITY_FILTER'), p=np.array((0.3, 0.7)))
 
         if FILTER_TYPE == 'NO_FILTER':
-            return '', None, None, None
+            _, _, _, units = self.ner_tokens_generator.sample_semantic_quantity()
+            return '', None, None, units
         else:
             quantity_phrase, numbers, comparators, units = self.ner_tokens_generator.sample_semantic_quantity()
             return quantity_phrase, numbers, comparators, units
@@ -87,12 +88,13 @@ class NaiveQuestionsGenerator:
 
         question_prefix = self.generate_question_prefix()
         question_object = self.generate_countable_object_of_interest()
+        question_object_plural = question_object + 's'    # For plural
         verb_phrase, actor_name = self.generate_countable_verb_phrase()
 
         temporal_filter, min_event_time, max_event_time = self.generate_temporal_filter()
         quantity_phrase, numbers, comparators, units = self.generate_quantity_filter()
 
-        question = ' '.join((question_prefix, question_object, verb_phrase))
+        question = ' '.join((question_prefix, question_object_plural, verb_phrase))
         if len(temporal_filter) > 0:
             question += ' ' + temporal_filter
         if len(quantity_phrase) > 0:
@@ -101,14 +103,15 @@ class NaiveQuestionsGenerator:
             question += ' ' + quantity_phrase
         question += '?'
 
-        meta_data = dict(
-            actor_name=actor_name,
-            question_object=question_object,
-            min_event_time=min_event_time,
-            max_event_time=max_event_time,
-            numbers=numbers,
-            comparators=comparators,
-            units=units
-        )
+        meta_data = {
+            '[Actor]': actor_name,
+            '[ActorGroup]': self.ner_tokens_generator.sample(category='ORG', strip_determiners=True),
+            '[QuestionObject]': question_object,
+            '[MinTemporal]': min_event_time,
+            '[MaxTemporal]': max_event_time,
+            '[GoalAmount]': numbers,
+            'comparators': comparators,
+            '[GoalUnit]': units
+        }
 
         return question, meta_data

@@ -1,0 +1,93 @@
+# The basic grammar rules.  Here's what the abbreviations stand for:
+#    S  = sentence
+#    NP = noun phrase
+#    VP = verb phrase
+#    PP = prepositional phrase
+#    Det = determiner (sometimes called "article")
+#    Prep = preposition
+#    Adj = adjective
+#    Rb = adverb
+
+#   TIME
+#   ACTOR
+#   ACTION
+#   GROUP_ACTION
+#   [Actor]
+#   [Temporal]
+#   [GoalAmount]
+#   [GoalUnit]
+#   [QuestionObject]
+#   [ActorGroup]
+
+
+1	ROOT	S .
+
+0.8	S	TIME ACTOR ACTION
+1   S   ACTOR ACTION TIME
+1.1   S   the [ActorGroup] GROUP_ACTION GROUP_PREP ACTOR ACTION TIME
+0.9   S   TIME the [ActorGroup] GROUP_ACTION GROUP_PREP ACTOR ACTION
+1   S   ACTOR ACTION TIME Rb [ActorGroup] GROUP_ACTION
+0.8	S	TIME ACTOR ACTION Rb the [ActorGroup] GROUP_ACTION
+
+1   GROUP_ACTION took the advantage
+1   GROUP_ACTION took the lead
+1   GROUP_ACTION set the record straight
+1   GROUP_ACTION swept the board
+1   GROUP_ACTION have emerged yet again
+1   GROUP_ACTION have earned their first points
+1   GROUP_ACTION finally retaliated
+
+1   GROUP_PREP after
+1   GROUP_PREP when
+
+1   TIME    on the [Temporal] quarter
+1   TIME    just before the [Temporal]
+1   TIME    between the [Temporal] and the [Temporal]
+1   TIME    during the [Temporal] quarter
+
+1   ACTOR   [Actor]
+1   ACTOR   Noun [Actor]
+
+1   ACTION  Verb Det [GoalAmount]-[GoalUnit] [QuestionObject]
+1   ACTION  Verb Det [GoalAmount] [GoalUnit] [QuestionObject]
+0.6   ACTION  Verb Det [GoalAmount]-[GoalUnit] and [GoalAmount]-[GoalUnit] [QuestionObject]s
+0.5   ACTION  Verb Det [GoalAmount] [GoalUnit] [QuestionObject] and [GoalAmount] [GoalUnit] [QuestionObject]
+
+1   Rb  thus
+1   Rb  therefore
+1   Rb  and as a result
+
+1	Verb	scored
+1	Verb	kicked
+1	Verb	have swept the crowd Prep
+1	Verb	set the tone Prep
+1	Verb	picked up the pace Prep
+1	Verb	turned the tide Prep
+1	Verb	lead their team Prep
+1	Verb	brought the [ActorGroup] to an advantage Prep
+
+1	Det	the
+1	Det	a
+
+1	Noun	player
+1	Noun	quarterback
+1	Noun	champion
+1	Noun	Mr
+1	Noun	star
+
+1	Adj	splendid
+1	Adj	graceful
+1	Adj	powerful
+1	Adj	smart
+1	Adj	unstoppable
+1	Adj	legendary
+1	Adj	marginal
+1	Adj	surprising
+
+1	Prep	with
+0.6	Prep	due to
+0.6	Prep	thanks to
+1	Prep	by
+1	Prep	giving way to
+1	Prep	with Det Adj move that ended in
+1	Prep	with Det Adj event which came down to

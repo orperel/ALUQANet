@@ -11,6 +11,7 @@ import json
 from drop_bert.data_processing import BertDropTokenizer, BertDropTokenIndexer, BertDropReader
 from allennlp.pretrained import fine_grained_named_entity_recognition_with_elmo_peters_2018
 from allennlp.pretrained import named_entity_recognition_with_elmo_peters_2018
+from allennlp.data.tokenizers.sentence_splitter import SpacySentenceSplitter
 
 
 def create_nabert_reader(data_path, lazy=True):
@@ -45,9 +46,20 @@ def aggregate_named_entities(sentence, named_entities):
             ne = ' '.join(current_ne_tokens)
             named_entities[named_entity_stripped].append(ne)
 
+def dump_frequency_table(aggregated_named_entities, filename):
+    named_entities_frequency_table = {}
+    for named_entity_category, words in aggregated_named_entities.items():
+        word_counts = Counter(words)
+        total_sum = sum(word_counts.values())
+        word_frequencies = [(word, float(frequency) / total_sum) for word, frequency in word_counts.items()]
+        named_entities_frequency_table[named_entity_category] = word_frequencies
+
+    with open(filename, 'w') as f:
+        json.dump(named_entities_frequency_table, f)
 
 instances = create_nabert_reader(data_path='../../data/drop_dataset/drop_dataset_train.json')
 ner_tagger = fine_grained_named_entity_recognition_with_elmo_peters_2018()
+sentences_splitter = SpacySentenceSplitter()
 named_entities = defaultdict(list)
 
 with torch.no_grad():
@@ -56,18 +68,15 @@ with torch.no_grad():
         original_passage = instance.fields['metadata'].metadata['original_passage']
 
         aggregate_named_entities(original_question, named_entities)
-        aggregate_named_entities(original_passage, named_entities)
 
+        # NER tagger is more accurate when single sentences are fed as input
+        passage_sentences = sentences_splitter.split_sentences(original_passage)
+        for passage_sentence in passage_sentences:
+            aggregate_named_entities(passage_sentence, named_entities)
 
-named_entities_frequency_table = {}
-for named_entity_category, words in named_entities.items():
-    word_counts = Counter(words)
-    total_sum = sum(word_counts.values())
-    word_frequencies = [(word, float(frequency) / total_sum) for word, frequency in word_counts.items()]
-    named_entities_frequency_table[named_entity_category] = word_frequencies
+        if instance_idx % 501 == 500:
+            dump_frequency_table(named_entities, 'ner_frequencies_latest.json')
 
-
-with open('ner_frequencies.json', 'w') as f:
-    json.dump(named_entities_frequency_table, f)
+dump_frequency_table(named_entities, 'ner_frequencies.json')
 
 print('Done.')
