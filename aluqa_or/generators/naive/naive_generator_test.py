@@ -3,7 +3,7 @@ from aluqa_or.generators.naive.naive_generator import NaiveQAGenerator
 
 qa_generator = NaiveQAGenerator()
 
-for idx in range(1, 11):
+for idx in range(1, 200):
     question, answer, passage, \
     passage_span_indices, passage_spans, question_metadata, passage_metadata = qa_generator.generate()
 

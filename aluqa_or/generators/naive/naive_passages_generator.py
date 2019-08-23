@@ -110,6 +110,8 @@ class NaivePassagesGenerator:
         # high_idx must be higher than low_idx but no more than temporal_options's last index
         high_idx = max(high_idx + 1, min(low_idx + 2, max_idx))
         temporal_options = temporal_options[low_idx:high_idx]
+        if len(temporal_options) == 0:
+            temporal_options = ['fourth']   # Can't be empty
         temporal_val = np.random.choice(temporal_options)
 
         return temporal_val
@@ -181,8 +183,6 @@ class NaivePassagesGenerator:
         return np.random.choice([1, 2, 3, 4, 5, 6, 7], p=[0.35, 0.25, 0.12, 0.1, 0.08, 0.08, 0.02])
 
     def _generate_passage(self, question_metadata, answer):
-        sentences_seed = self._seed_passage()
-        ner_pool = self._seed_ner_pool()
 
         total_countable_entities = 0
         golden_set = list()
@@ -199,8 +199,10 @@ class NaivePassagesGenerator:
                 passage_metadata['template_golden_sentences'].append(template_sentence)
                 passage_metadata['golden_sentences'].append(golden_sentence)
 
+        ner_pool = self._seed_ner_pool()
         noisy_sentences = []
         while len(noisy_sentences) < 2:
+            sentences_seed = self._seed_passage()
             noisy_sentences = []
             for sentence_order, sentence in sentences_seed.items():
                 sentence = sentence[0]
