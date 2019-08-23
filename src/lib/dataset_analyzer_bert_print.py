@@ -16,6 +16,8 @@ from aluqa_or.aluqa_experimental_model import ALUQAExperimental
 from drop_bert.data_processing import BertDropTokenizer, BertDropTokenIndexer, BertDropReader
 from src.lib.inference_utils import data_instance_to_model_input, filter_count_questions
 from torch.utils.tensorboard import SummaryWriter
+from aluqa_itay.aluqa_count_spans_syntactic_parser import AluQACount
+from aluqa_itay.data_processing import PickleReader
 
 from allennlp.data.vocabulary import Vocabulary
 
@@ -166,6 +168,25 @@ def featurize_entry(entry, question_vector, passage_vector, featureize_by='all_f
             raise ValueError('Unknown featurize_by arg')
 
 
+def load_aluqa_model(weights_path, selection_output_file_path=None):
+    device_num = 0
+    device = torch.device('cuda:%d' % device_num)
+    model = AluQACount(Vocabulary(), 'bert-base-uncased', special_numbers=[100, 1], answering_abilities=["counting"])
+    model.load_state_dict(torch.load(weights_path, map_location=device))
+    model.selection_output_file_path = selection_output_file_path
+    model.to(device)
+    model.eval()
+
+    return model
+
+
+def create_aluqa_reader(data_path, question_type):
+    reader = PickleReader(question_type=question_type)
+    instances = reader.read(data_path)
+
+    return instances
+
+
 def load_nabert_model(weights_path, use_custom_model=False):
     device_num = 0
     device = torch.device('cuda:%d' % device_num)
@@ -252,10 +273,13 @@ def plot_confusion_matrix(writer, correct_labels, predict_labels, labels,
     writer.add_figure(figure=fig, tag=tensor_name)
 
 
-model = load_nabert_model(weights_path='../results/nabert/best.th')
+# model = load_nabert_model(weights_path='../results/nabert/best.th')
 # model = load_nabert_model(weights_path='../results/aluqa_exp7/best.th', use_custom_model=True)
-instances = create_nabert_reader(data_path='../../data/drop_dataset/drop_dataset_train.json')
-
+# instances = create_nabert_reader(data_path='/home/itaysofer/Desktop/Drop/data/drop_dataset_train.json')
+model = load_aluqa_model('/home/itaysofer/Desktop/Drop/run/aluqa_span_count_overfit/serialization/best.th',
+                         selection_output_file_path='./selection_output' + datetime.now().strftime("%Y%m%d-%H%M%S") + ".txt")
+instances = create_aluqa_reader(data_path='/home/itaysofer/Desktop/Drop/data/drop_dataset_spans_dev.pickle',
+                                question_type=["count"])
 
 feature_vecs_all = []
 feature_vecs_token_count = []
@@ -330,7 +354,7 @@ with torch.no_grad():
 # tensorboard --logdir=tb_data_analysis
 # (2) Forward the display to local machine with:
 # ssh -i <PATH_TO_REMOTE_MACHINE_SSH_KEY> -N -L localhost:6006:localhost:6006 ubuntu@<REMOTE_IP>
-writer = SummaryWriter("tb_data_analysis/nabert_debug_prints" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+writer = SummaryWriter("tb_data_analysis/aluqa_count_spans" + datetime.now().strftime("%Y%m%d-%H%M%S"))
 
 plot_confusion_matrix(writer=writer,
                       correct_labels=np.array(count_gt_samples),
