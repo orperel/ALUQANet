@@ -1,0 +1,31 @@
+{
+    "dataset_reader": {
+        "type": "pickled"
+    },
+    "iterator": {
+        "type": "basic",
+        "batch_size": 4
+    },
+    "model": {
+        "type": "aluqa_count_spans",
+        "bert_pretrained_model": "bert-base-uncased",
+        "dropout_prob": 0.1,
+        "special_numbers": [100, 1],
+        "answering_abilities": ["counting"],
+        "count_loss_weights": [1000, 0]
+    },
+    "train_data_path": "/home/itaysofer/Desktop/Drop/data/generated_dataset/generated_dataset_train.pickle",
+    "validation_data_path": "/home/itaysofer/Desktop/Drop/data/generated_dataset/generated_dataset_dev.pickle",
+    "trainer": {
+        "cuda_device": 0,
+        "num_serialized_models_to_keep": 1,
+        "num_epochs": 500,
+        "optimizer": {
+            "type": "bert_adam",
+            "lr": 1e-06
+        },
+        "patience": 500,
+        "summary_interval": 100,
+        "validation_metric": "+f1"
+    }
+}

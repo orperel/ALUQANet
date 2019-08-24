@@ -50,8 +50,8 @@
 
 1   ACTION  Verb Det [GoalAmount]-[GoalUnit] [QuestionObject]
 1   ACTION  Verb Det [GoalAmount] [GoalUnit] [QuestionObject]
-0.6   ACTION  Verb Det [GoalAmount]-[GoalUnit] and [GoalAmount]-[GoalUnit] [QuestionObject]s
-0.5   ACTION  Verb Det [GoalAmount] [GoalUnit] [QuestionObject] and [GoalAmount] [GoalUnit] [QuestionObject]
+0   ACTION  Verb a [GoalAmount]-[GoalUnit] and a [GoalAmount]-[GoalUnit] [QuestionObject]
+0   ACTION  Verb a [GoalAmount] [GoalUnit] [QuestionObject] and a [GoalAmount] [GoalUnit] [QuestionObject]
 
 1   Rb  thus
 1   Rb  therefore

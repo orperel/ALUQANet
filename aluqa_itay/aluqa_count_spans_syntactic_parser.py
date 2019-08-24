@@ -168,7 +168,8 @@ class AluQACount(Model):
                 answer_as_expressions: torch.LongTensor = None,
                 answer_as_expressions_extra: torch.LongTensor = None,
                 answer_as_counts: torch.LongTensor = None,
-                metadata: List[Dict[str, Any]] = None) -> Dict[str, torch.Tensor]:
+                metadata: List[Dict[str, Any]] = None,
+                count_gold_spans: torch.LongTensor = None) -> Dict[str, torch.Tensor]:
         # pylint: disable=arguments-differ
         # Shape: (batch_size, seqlen)
         question_passage_tokens = question_passage["tokens"]

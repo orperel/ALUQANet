@@ -30,7 +30,7 @@ class SpanExtractor:
         spans_subtrees = list(syntactic_tree.subtrees(filter=lambda x: x.label() in spans_labels))
 
         spans_ngrams = list(map(lambda t: t.leaves(), spans_subtrees))
-        spans_ngrams = list(filter(lambda ngram: len(ngram) < max_span_length, spans_ngrams))
+        spans_ngrams = self.filter_ngrams(spans_ngrams, max_span_length)
 
         spans = []
         for span_ngram in spans_ngrams:
@@ -83,3 +83,20 @@ class SpanExtractor:
     @staticmethod
     def contained_in(inner_span, outer_span):
         return inner_span[0] >= outer_span[0] and inner_span[1] <= outer_span[1]
+
+    @staticmethod
+    def filter_ngrams(spans_ngrams, max_span_length):
+        # filtered_ngrams = []
+        #
+        # short_ngrams = list(filter(lambda ngram: len(ngram) < max_span_length, spans_ngrams))
+        # for span_ngram in short_ngrams:
+        #     indices = [i for i, s in enumerate(span_ngram) if 'and_' in s]
+        #     if len(indices) > 0:
+        #         filtered_ngrams.append(span_ngram[:indices[0]])
+        #         filtered_ngrams.append(span_ngram[indices[0] + 1:])
+        #     else:
+        #         filtered_ngrams.append(span_ngram)
+        #
+        # return filtered_ngrams
+
+        return list(filter(lambda ngram: len(ngram) < max_span_length, spans_ngrams))
