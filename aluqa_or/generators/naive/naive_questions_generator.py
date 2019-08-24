@@ -76,12 +76,13 @@ class NaiveQuestionsGenerator:
 
     def generate_quantity_filter(self):
         FILTER_TYPE = np.random.choice(('NO_FILTER', 'QUANTITY_FILTER'), p=np.array((0.3, 0.7)))
+        units = ('yard', 'points', 'meters')
 
         if FILTER_TYPE == 'NO_FILTER':
-            _, _, _, units = self.ner_tokens_generator.sample_semantic_quantity()
+            _, _, _, units = self.ner_tokens_generator.sample_semantic_quantity(units)
             return '', None, None, units
         else:
-            quantity_phrase, numbers, comparators, units = self.ner_tokens_generator.sample_semantic_quantity()
+            quantity_phrase, numbers, comparators, units = self.ner_tokens_generator.sample_semantic_quantity(units)
             return quantity_phrase, numbers, comparators, units
 
     def generate_question(self):
