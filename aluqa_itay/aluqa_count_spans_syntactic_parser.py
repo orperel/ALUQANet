@@ -233,7 +233,7 @@ class AluQACount(Model):
             best_answer_ability = torch.argmax(answer_ability_log_probs, 1)
 
         if "counting" in self.answering_abilities:
-            count_number, max_prob, min_prob, select_probs = self._count_module(passage_out, passage_spans, question_vector)
+            count_number, max_prob, min_prob, select_logits, select_probs = self._count_module(passage_out, passage_spans, question_vector)
             answer_as_counts = answer_as_counts.squeeze(1)
             gold_count_mask = (answer_as_counts != -1).long()
             count_number = util.replace_masked_values(count_number, gold_count_mask, 0)
@@ -332,7 +332,8 @@ class AluQACount(Model):
         # if self.training:
         #     output_dict["loss"] = self._count_loss(answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask)
 
-        output_dict["loss"] = self._count_loss(answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask)
+        output_dict["loss"] = self._count_regression_loss(answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask) \
+            if count_gold_spans is None else self._count_cross_entropy_loss(select_logits, count_gold_spans, passage_spans)
 
         with torch.no_grad():
             # Compute the metrics and add the tokenized input to the output.
@@ -556,7 +557,7 @@ class AluQACount(Model):
         count_number = torch.sum(select_probs_masked, 1)
         max_prob = torch.max(select_probs_masked[span_mask.byte()])
         min_prob = torch.min(select_probs_masked[span_mask.byte()])
-        return count_number, max_prob, min_prob, select_probs_masked
+        return count_number, max_prob, min_prob, select_logits, select_probs_masked
     
 
     def _count_log_likelihood(self, answer_as_counts, count_number_log_probs):
@@ -575,7 +576,7 @@ class AluQACount(Model):
         return log_marginal_likelihood_for_count
 
 
-    def _count_loss(self, answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask):
+    def _count_regression_loss(self, answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask):
         # Count answers are padded with label -1,
         # so we clamp those paddings to 0 and then mask after `torch.gather()`.
         # Shape: (batch_size, # of count answers)
@@ -592,6 +593,12 @@ class AluQACount(Model):
 
         return (huber_loss) + (selection_loss * self._count_loss_weights[0]) + (entropy_loss * self._count_loss_weights[1])
 
+
+    def _count_cross_entropy_loss(self, select_logits, count_gold_spans, passage_spans):
+        span_mask = (passage_spans[:, :, 0] >= 0).squeeze(-1).long()
+        count_gold_spans_unmasked = util.replace_masked_values(count_gold_spans, span_mask, 0)
+        loss = util.sequence_cross_entropy_with_logits(select_logits, count_gold_spans_unmasked, span_mask)
+        return loss
 
     def _calc_entropy_loss(self, select_probs, passage_mask):
         legal_select_probs = select_probs[(select_probs > 0) & (select_probs < 1)]
