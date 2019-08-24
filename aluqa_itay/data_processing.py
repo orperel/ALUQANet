@@ -206,7 +206,7 @@ class BertDropReader(DatasetReader):
                     instances.append(instance)
 
         if self.extract_spans:
-            with open(file_path.slit('/')[-1].split('.')[0] + "_failed_passages.json", 'w+') as outfile:
+            with open(file_path.split('/')[-1].split('.')[0] + "_failed_passages.json", 'w+') as outfile:
                 json.dump(failed_passages, outfile)
         return instances
 
