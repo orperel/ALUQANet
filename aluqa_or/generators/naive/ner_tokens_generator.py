@@ -1,4 +1,5 @@
 import json
+import re
 import numpy as np
 
 
@@ -24,34 +25,45 @@ class NERTokensGenerator:
 
         return ner_frequency_table
 
-    def sample_semantic_quantity(self):
-        ner_sample = self.sample(category='QUANTITY')
-        while not any([u in ner_sample for u in ('yard', 'points', 'meters')]):
+    @staticmethod
+    def _extract_numbers_from_sample(ner_sample):
+        number_strings = re.findall(r'\d+(?:[\d.,-]*\d)', ner_sample)
+        numbers = [float(n) if '.' in n else int(re.sub('[,-]', '', n)) for n in number_strings]
+        return numbers
+
+    def sample_semantic_quantity(self, units):
+
+        while True:
             ner_sample = self.sample(category='QUANTITY')
-        numbers = [int(s) for s in ner_sample.split() if s.isdigit()]
+            if not any([u in ner_sample for u in units]):
+                continue    # No units ; Resample
 
-        if len(numbers) == 1:
-            if any([term in ner_sample for term in ('less', 'lower', 'small', 'short', 'below')]):
-                comparators = ['<']
-            elif any([term in ner_sample for term in ('longer', 'more', 'higher', 'big', 'great', 'above')]):
-                comparators = ['>']
+            numbers = self._extract_numbers_from_sample(ner_sample)
+            if len(numbers) == 1:
+                if any([term in ner_sample for term in ('less', 'lower', 'small', 'short', 'below')]):
+                    comparators = ['<']
+                elif any([term in ner_sample for term in ('longer', 'more', 'higher', 'big', 'great', 'above')]):
+                    comparators = ['>']
+                else:
+                    continue    # comparators = ['='] ; Resample
+            elif len(numbers) == 2:
+                comparators = ['>', '<']  # Assume between
+                if numbers[1] <= numbers[0]:
+                    continue
             else:
-                comparators = ['=']
-        else:
-            comparators = ['>', '<']  # Assume between
+                continue    # Too many numbers ; Resample
+            break
 
-        if 'yard' in ner_sample:
-            units = 'yard'
-        elif 'yards' in ner_sample:
-            units = 'yards'
-        elif 'points' in ner_sample:
-            units = 'points'
-        elif 'meters' in ner_sample:
-            units = 'meters'
-        else:
-            units = 'yard'
+        # Check which unit the numbers describe, if none exists assign the first possibility by default
+        unit = None
+        for candidate_unit in units:
+            if candidate_unit in ner_sample:
+                unit = candidate_unit
+                break
+        if unit is None:
+            unit = units[0]
 
-        return ner_sample, numbers, comparators, units
+        return ner_sample, numbers, comparators, unit
 
     def available_ner_categories(self):
         return ['[' + ner_tag + ']' for ner_tag in self.ner_frequency_table.keys()]
