@@ -8,19 +8,19 @@ class SpanExtractor:
         archive = load_archive("https://s3-us-west-2.amazonaws.com/allennlp/models/elmo-constituency-parser-2018.03.14.tar.gz")
         self.predictor = Predictor.from_archive(archive, 'constituency-parser')
 
-    def extract_passage_spans(self, passage_tokens, spans_labels, max_span_length):
+    def extract_passage_spans(self, passage_tokens, spans_labels):
         spans = []
         word_tokens_text = [token.text for token in passage_tokens]
         sentences_indices = self._get_sentence_indices(word_tokens_text)
         for i in range(len(sentences_indices) - 1):
             sentence_tokens = word_tokens_text[sentences_indices[i]: sentences_indices[i + 1]]
-            sentence_spans = self.extract_sentence_spans(sentence_tokens, spans_labels, max_span_length)
+            sentence_spans = self.extract_sentence_spans(sentence_tokens, spans_labels)
             sentence_spans_shifted = [tuple([span[0] + sentences_indices[i], span[1] + sentences_indices[i]])
                                       for span in sentence_spans]
             spans += sentence_spans_shifted
         return spans
 
-    def extract_sentence_spans(self, sentence_tokens, spans_labels, max_span_length):
+    def extract_sentence_spans(self, sentence_tokens, spans_labels):
         fixed_sentence_tokens = self.fix_sentence_tokens(sentence_tokens)
         prediction = self.predictor.predict_json({"sentence": ' '.join(fixed_sentence_tokens)})
 
@@ -30,15 +30,12 @@ class SpanExtractor:
         spans_subtrees = list(syntactic_tree.subtrees(filter=lambda x: x.label() in spans_labels))
 
         spans_ngrams = list(map(lambda t: t.leaves(), spans_subtrees))
-        spans_ngrams = self.filter_ngrams(spans_ngrams, max_span_length)
 
         spans = []
         for span_ngram in spans_ngrams:
             start_index = int(span_ngram[0].split('_')[-1])
             end_index = int(span_ngram[-1].split('_')[-1]) + 1
             spans += [(start_index, end_index)]
-
-        spans = self.remove_contained_spans(spans)
 
         return spans
 
@@ -68,35 +65,3 @@ class SpanExtractor:
             non_terminal[0] = non_terminal[0] + "_" + str(idx)
         return tree
 
-    @staticmethod
-    def remove_contained_spans(spans):
-        if len(spans) == 0:
-            return spans
-
-        filtered_spans = spans[:1]
-        for span in spans[1:]:
-            if SpanExtractor.contained_in(span, filtered_spans[-1]) is False:
-                filtered_spans += [span]
-
-        return filtered_spans
-
-    @staticmethod
-    def contained_in(inner_span, outer_span):
-        return inner_span[0] >= outer_span[0] and inner_span[1] <= outer_span[1]
-
-    @staticmethod
-    def filter_ngrams(spans_ngrams, max_span_length):
-        # filtered_ngrams = []
-        #
-        # short_ngrams = list(filter(lambda ngram: len(ngram) < max_span_length, spans_ngrams))
-        # for span_ngram in short_ngrams:
-        #     indices = [i for i, s in enumerate(span_ngram) if 'and_' in s]
-        #     if len(indices) > 0:
-        #         filtered_ngrams.append(span_ngram[:indices[0]])
-        #         filtered_ngrams.append(span_ngram[indices[0] + 1:])
-        #     else:
-        #         filtered_ngrams.append(span_ngram)
-        #
-        # return filtered_ngrams
-
-        return list(filter(lambda ngram: len(ngram) < max_span_length, spans_ngrams))

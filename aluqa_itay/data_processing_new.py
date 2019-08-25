@@ -31,10 +31,14 @@ class PickleReader(DatasetReader):
     def __init__(self,
                  question_type: List[str] = None,
                  max_count: int = 10,
+                 max_span_length: int = 10,
+                 remove_containing_spans: bool = True,
                  lazy: bool = False):
         super(PickleReader, self).__init__(lazy)
         self.question_type = question_type
         self.max_count = max_count
+        self.max_span_length = max_span_length
+        self.remove_containing_spans = remove_containing_spans
 
     @overrides
     def _read(self, file_path: str):
@@ -49,9 +53,85 @@ class PickleReader(DatasetReader):
             if self.question_type is not None and get_question_type(question_text, answer_type, answer,
                                                                     self.max_count) not in self.question_type:
                 continue
+
+            self.add_passage_spans_and_gold_count_spans_to_instance(instance)
+
             filtered_instances.append(instance)
 
         return filtered_instances
+
+    def add_passage_spans_and_gold_count_spans_to_instance(self, instance):
+        metadata = instance.fields['metadata'].metadata
+
+        passage_spans = self.get_passage_spans(metadata)
+        passage_span_fields = [SpanField(span[0], span[1], instance.fields["question_passage"]) for span in
+                               passage_spans]
+        instance.fields["passage_spans"] = ListField(passage_span_fields)
+
+        if "count_gold_spans_text" in metadata:
+            count_gold_spans = self.get_count_gold_spans(passage_spans, metadata)
+            instance.fields["count_gold_spans"] = ListField(
+                [LabelField(label, skip_indexing=True) for label in count_gold_spans])
+
+    def get_passage_spans(self, metadata):
+        passage_spans = metadata["passage_spans"]
+
+        passage_spans = self.filter_spans(passage_spans)
+
+        qlen = len(metadata["question_tokens"])
+        # adapt indexes to question_passage_tokens sequence
+        passage_spans = [(span[0] + qlen + 2, span[1] + qlen + 2) for span in passage_spans]
+        # remove spans of truncated part of passage
+        passage_spans = [span for span in passage_spans if span[1] <= len(metadata["question_passage_tokens"])]
+        # make span indexes inclusive
+        passage_spans = [(span[0], span[1] - 1) for span in passage_spans]
+
+        return passage_spans
+
+    def filter_spans(self, passage_spans):
+        filtered_spans = list(filter(lambda span: span[1] - span[0] < self.max_span_length, passage_spans))
+
+        if self.remove_containing_spans:
+            filtered_spans = self.remove_contained_spans(filtered_spans)
+
+        return filtered_spans
+
+    @staticmethod
+    def contained_in(inner_span, outer_span):
+        return inner_span[0] >= outer_span[0] and inner_span[1] <= outer_span[1]
+
+    @staticmethod
+    def remove_contained_spans(spans):
+        if len(spans) == 0:
+            return spans
+
+        filtered_spans = spans[:1]
+        for span in spans[1:]:
+            if PickleReader.contained_in(span, filtered_spans[-1]) is False:
+                filtered_spans += [span]
+
+        return filtered_spans
+
+    @staticmethod
+    def get_count_gold_spans(passage_spans, metadata):
+        count_gold_spans_text = metadata["count_gold_spans_text"]
+        question_passage_tokens = metadata["question_passage_tokens"]
+
+        passage_spans_text_compressed = [''.join([token.text for token in question_passage_tokens[span[0]: span[1] + 1]]).replace("##", "")
+                                         for span in passage_spans]
+        count_gold_spans_text_compressed = [count_gold_span_text.replace(" ", "") for count_gold_span_text in count_gold_spans_text]
+
+        count_gold_spans = []
+        for passage_span_text_compressed in passage_spans_text_compressed:
+            if len(count_gold_spans_text_compressed) == 0:
+                count_gold_spans.append(0)
+            elif count_gold_spans_text_compressed[0] in passage_span_text_compressed:
+                count_gold_spans.append(1)
+                count_gold_spans_text_compressed.pop(0)
+            else:
+                count_gold_spans.append(0)
+
+        return count_gold_spans
 
 
 @Tokenizer.register("bert-drop")
@@ -97,8 +177,7 @@ class BertDropReader(DatasetReader):
                  extra_numbers: List[float] = [],
                  question_type: List[str] = None,
                  extract_spans: bool = False,
-                 spans_labels: List[str] = [],
-                 span_max_length: int = -1):
+                 spans_labels: List[str] = []):
         super(BertDropReader, self).__init__(lazy)
         self.tokenizer = tokenizer
         self.token_indexers = token_indexers
@@ -118,7 +197,6 @@ class BertDropReader(DatasetReader):
         if self.extract_spans:
             self.span_extractor = SpanExtractor()
             self.spans_labels = spans_labels
-            self.span_max_length = span_max_length
         self.op_dict = {'+': operator.add, '-': operator.sub, '*': operator.mul, '/': operator.truediv}
         self.operations = list(enumerate(self.op_dict.keys()))
         self.templates = [lambda x, y, z: (x + y) * z,
@@ -155,7 +233,7 @@ class BertDropReader(DatasetReader):
 
             try:
                 passage_spans = [] if self.extract_spans is False \
-                    else self.span_extractor.extract_passage_spans(word_tokens, self.spans_labels, self.span_max_length)
+                    else self.span_extractor.extract_passage_spans(word_tokens, self.spans_labels)
             except:
                 failed_passages.append(passage_id)
                 continue
@@ -199,7 +277,7 @@ class BertDropReader(DatasetReader):
                     answer_annotations.append(question_answer["answer"])
                 if self.use_validated and "validated_answers" in question_answer:
                     answer_annotations += question_answer["validated_answers"]
-                count_gold_spans_text = question_answer['span_text']
+                count_gold_spans_text = None if "span_text" not in question_answer else question_answer['span_text']
                 instance = self.text_to_instance(question_text,
                                                  passage_text,
                                                  passage_tokens,
@@ -258,29 +336,11 @@ class BertDropReader(DatasetReader):
 
         mask_indices = [0, qlen + 1, len(question_passage_tokens) - 1]
 
-        if self.extract_spans:
-            # adapt indexes to question_passage_tokens sequence
-            passage_spans = [(span[0] + qlen + 2, span[1] + qlen + 2) for span in passage_spans]
-            # remove spans of truncated part of passage
-            passage_spans = [span for span in passage_spans if span[1] <= len(question_passage_tokens)]
-            # make span indexes inclusive
-            passage_spans = [(span[0], span[1] - 1) for span in passage_spans]
-
-            count_gold_spans = self.get_count_gold_spans(count_gold_spans_text, passage_spans, question_passage_tokens)
-
-
         fields: Dict[str, Field] = {}
 
         # Add feature fields
         question_passage_field = TextField(question_passage_tokens, self.token_indexers)
         fields["question_passage"] = question_passage_field
-
-        if self.extract_spans:
-            passage_span_fields = [SpanField(span[0], span[1], question_passage_field) for span in passage_spans]
-            fields["passage_spans"] = ListField(passage_span_fields)
-
-            fields["count_gold_spans"] = ListField([LabelField(label, skip_indexing=True) for label in count_gold_spans])
-
 
         number_token_indices = \
             [ArrayField(np.arange(start_ind, start_ind + number_len[i]), padding_value=-1)
@@ -303,6 +363,12 @@ class BertDropReader(DatasetReader):
                     "question_passage_tokens": question_passage_tokens,
                     "passage_id": passage_id,
                     "question_id": question_id}
+
+        if self.extract_spans:
+            metadata["passage_spans"] = passage_spans
+
+        if count_gold_spans_text is not None:
+            metadata["count_gold_spans_text"] = count_gold_spans_text
 
         if answer_annotations:
             for annotation in answer_annotations:
@@ -431,20 +497,3 @@ class BertDropReader(DatasetReader):
 
         return Instance(fields)
 
-
-    def get_count_gold_spans(self, count_gold_spans_text, passage_spans, question_passage_tokens):
-        passage_spans_text_compressed = [''.join([token.text for token in question_passage_tokens[span[0]: span[1] + 1]]).replace("##", "")
-                                         for span in passage_spans]
-        count_gold_spans_text_compressed = [count_gold_span_text.replace(" ", "") for count_gold_span_text in count_gold_spans_text]
-
-        count_gold_spans = []
-        for passage_span_text_compressed in passage_spans_text_compressed:
-            if len(count_gold_spans_text_compressed) == 0:
-                count_gold_spans.append(0)
-            elif count_gold_spans_text_compressed[0] in passage_span_text_compressed:
-                count_gold_spans.append(1)
-                count_gold_spans_text_compressed.pop(0)
-            else:
-                count_gold_spans.append(0)
-
-        return count_gold_spans

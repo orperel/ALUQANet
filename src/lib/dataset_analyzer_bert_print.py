@@ -17,7 +17,7 @@ from drop_bert.data_processing import BertDropTokenizer, BertDropTokenIndexer, B
 from src.lib.inference_utils import data_instance_to_model_input, filter_count_questions
 from torch.utils.tensorboard import SummaryWriter
 from aluqa_itay.aluqa_count_spans_syntactic_parser import AluQACount
-from aluqa_itay.data_processing import PickleReader
+from aluqa_itay.data_processing_old import PickleReader
 
 from allennlp.data.vocabulary import Vocabulary
 

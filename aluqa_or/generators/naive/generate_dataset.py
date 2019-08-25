@@ -2,6 +2,8 @@ import json
 import random
 
 import numpy as np
+from tqdm import tqdm
+
 from aluqa_or.generators.naive.naive_generator import NaiveQAGenerator
 
 num_instances = 10
@@ -12,7 +14,7 @@ random.seed(123)
 qa_generator = NaiveQAGenerator()
 instances = dict()
 
-for idx in range(num_instances):
+for idx in tqdm(range(num_instances)):
     question, answer, passage, \
     passage_span_indices, passage_spans, question_metadata, passage_metadata = qa_generator.generate()
 

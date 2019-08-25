@@ -13,7 +13,6 @@
         },
         "extra_numbers": [100, 1],
         "extract_spans": true,
-        "spans_labels": ["NP"],
-        "span_max_length": 10
+        "spans_labels": ["NP"]
     }
 }
