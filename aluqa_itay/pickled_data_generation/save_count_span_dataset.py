@@ -1,7 +1,7 @@
 import pickle
 from allennlp.common import Params
 from allennlp.data import DatasetReader
-from aluqa_itay.data_processing_new import BertDropTokenizer, BertDropTokenIndexer, BertDropReader
+from aluqa_itay.data_processing import BertDropTokenizer, BertDropTokenIndexer, BertDropReader
 
 
 def create_nabert_drop_reader(data_split='dev'):
