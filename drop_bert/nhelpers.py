@@ -219,7 +219,7 @@ def get_answer_type(answers):
 
 
 count_questions_prefixes = ["how many field goal", "how many touchdown", "how many pass", "how many times",
-                            "how many interception"]
+                            "how many interception", "how many goal", "what number of", "what amount of"]
 
 
 def get_question_type(question_text, answer_type, answer, max_count):
