@@ -17,7 +17,7 @@ from drop_bert.data_processing import BertDropTokenizer, BertDropTokenIndexer, B
 from src.lib.inference_utils import data_instance_to_model_input, filter_count_questions
 from torch.utils.tensorboard import SummaryWriter
 from aluqa_itay.aluqa_count_spans_syntactic_parser import AluQACount
-from aluqa_itay.data_processing_old import PickleReader
+from aluqa_itay.data_processing import PickleReader
 
 from allennlp.data.vocabulary import Vocabulary
 
@@ -180,8 +180,10 @@ def load_aluqa_model(weights_path, selection_output_file_path=None):
     return model
 
 
-def create_aluqa_reader(data_path, question_type):
-    reader = PickleReader(question_type=question_type)
+def create_aluqa_reader(data_path, question_type, max_span_length, remove_containing_spans):
+    reader = PickleReader(question_type=question_type,
+                          max_span_length=max_span_length,
+                          remove_containing_spans=remove_containing_spans)
     instances = reader.read(data_path)
 
     return instances
@@ -279,7 +281,9 @@ def plot_confusion_matrix(writer, correct_labels, predict_labels, labels,
 model = load_aluqa_model('/home/itaysofer/Desktop/Drop/run/aluqa_span_count_overfit/serialization/best.th',
                          selection_output_file_path='./selection_output' + datetime.now().strftime("%Y%m%d-%H%M%S") + ".txt")
 instances = create_aluqa_reader(data_path='/home/itaysofer/Desktop/Drop/data/drop_dataset_spans_dev.pickle',
-                                question_type=["count"])
+                                question_type=["count"],
+                                max_span_length=10,
+                                remove_containing_spans=True)
 
 feature_vecs_all = []
 feature_vecs_token_count = []
