@@ -79,6 +79,9 @@ class PickleReader(DatasetReader):
                 return False
             instance.fields["count_gold_spans"] = ListField(
                 [LabelField(label, skip_indexing=True) for label in count_gold_spans])
+        else:
+            instance.fields["count_gold_spans"] = ListField([LabelField(0, skip_indexing=True).empty_field()] * len(passage_spans))
+
 
         return True
 

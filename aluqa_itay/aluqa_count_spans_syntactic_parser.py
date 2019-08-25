@@ -40,7 +40,8 @@ class AluQACount(Model):
                  number_rep: str = 'first',
                  arithmetic: str = 'base',
                  special_numbers : List[int] = None,
-                 count_loss_weights: List[int] = [1000, 10],
+                 count_regression_regularization_weights: List[int] = [1000, 10],
+                 count_loss_types_weights: List[int] = [1, 0],
                  selection_output_file_path: str = None) -> None:
         super().__init__(vocab, regularizer)
 
@@ -94,7 +95,8 @@ class AluQACount(Model):
             self._counting_index = self.answering_abilities.index("counting")
             self._count_number_predictor = \
                 self.ff(2*bert_dim, bert_dim, 2)
-            self._count_loss_weights = count_loss_weights
+            self._count_regression_regularization_weights = count_regression_regularization_weights
+            self._count_loss_types_weights = count_loss_types_weights
             self.span_extractor = SelfAttentiveSpanExtractor(input_dim=bert_dim)
 
         self.selection_output_file_path = selection_output_file_path
@@ -332,8 +334,8 @@ class AluQACount(Model):
         # if self.training:
         #     output_dict["loss"] = self._count_loss(answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask)
 
-        output_dict["loss"] = self._count_regression_loss(answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask) \
-            if count_gold_spans is None else self._count_cross_entropy_loss(select_logits, count_gold_spans, passage_spans)
+        output_dict["loss"] = self._count_loss_types_weights[0] * self._count_regression_loss(answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask)\
+                              + self._count_loss_types_weights[1] * self._count_cross_entropy_loss(select_logits, count_gold_spans, passage_spans)
 
         with torch.no_grad():
             # Compute the metrics and add the tokenized input to the output.
@@ -591,13 +593,14 @@ class AluQACount(Model):
 
         entropy_loss = self._calc_entropy_loss(select_probs, passage_mask)
 
-        return (huber_loss) + (selection_loss * self._count_loss_weights[0]) + (entropy_loss * self._count_loss_weights[1])
+        return (huber_loss) + (selection_loss * self._count_regression_regularization_weights[0]) +\
+               (entropy_loss * self._count_regression_regularization_weights[1])
 
 
     def _count_cross_entropy_loss(self, select_logits, count_gold_spans, passage_spans):
-        span_mask = (passage_spans[:, :, 0] >= 0).squeeze(-1).long()
-        count_gold_spans_unmasked = util.replace_masked_values(count_gold_spans, span_mask, 0)
-        loss = util.sequence_cross_entropy_with_logits(select_logits, count_gold_spans_unmasked, span_mask)
+        count_gold_spans_mask = (count_gold_spans >= 0).long()
+        count_gold_spans_unmasked = util.replace_masked_values(count_gold_spans, count_gold_spans_mask, 0)
+        loss = util.sequence_cross_entropy_with_logits(select_logits, count_gold_spans_unmasked, count_gold_spans_mask)
         return loss
 
     def _calc_entropy_loss(self, select_probs, passage_mask):
