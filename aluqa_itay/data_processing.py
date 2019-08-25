@@ -46,6 +46,7 @@ class PickleReader(DatasetReader):
             instances = pickle.load(dataset_file)
 
         filtered_instances = []
+        failed_instances_num = 0
         for instance in instances:
             question_text = instance.fields['metadata'].metadata['original_question']
             answer = instance.fields['metadata'].metadata['answer_annotations'][0]
@@ -54,13 +55,17 @@ class PickleReader(DatasetReader):
                                                                     self.max_count) not in self.question_type:
                 continue
 
-            self.add_passage_spans_and_gold_count_spans_to_instance(instance)
+            if self.try_add_passage_spans_and_gold_count_spans_to_instance(instance) is False:
+                failed_instances_num += 1
+                continue
 
             filtered_instances.append(instance)
 
+        print("Failed instances:", failed_instances_num)
+        print("Succeeded instances:", len(filtered_instances))
         return filtered_instances
 
-    def add_passage_spans_and_gold_count_spans_to_instance(self, instance):
+    def try_add_passage_spans_and_gold_count_spans_to_instance(self, instance):
         metadata = instance.fields['metadata'].metadata
 
         passage_spans = self.get_passage_spans(metadata)
@@ -69,9 +74,13 @@ class PickleReader(DatasetReader):
         instance.fields["passage_spans"] = ListField(passage_span_fields)
 
         if "count_gold_spans_text" in metadata:
-            count_gold_spans = self.get_count_gold_spans(passage_spans, metadata)
+            count_gold_spans = self.try_get_count_gold_spans(passage_spans, metadata)
+            if count_gold_spans is None:
+                return False
             instance.fields["count_gold_spans"] = ListField(
                 [LabelField(label, skip_indexing=True) for label in count_gold_spans])
+
+        return True
 
     def get_passage_spans(self, metadata):
         passage_spans = metadata["passage_spans"]
@@ -113,7 +122,7 @@ class PickleReader(DatasetReader):
         return filtered_spans
 
     @staticmethod
-    def get_count_gold_spans(passage_spans, metadata):
+    def try_get_count_gold_spans(passage_spans, metadata):
         count_gold_spans_text = metadata["count_gold_spans_text"]
         question_passage_tokens = metadata["question_passage_tokens"]
 
@@ -131,6 +140,10 @@ class PickleReader(DatasetReader):
             else:
                 count_gold_spans.append(0)
 
+        if sum(count_gold_spans) < len(count_gold_spans_text):
+            # print("Warning: count gold spans number was", len(count_gold_spans_text),
+            #       ", but found only", sum(count_gold_spans), "in passage spans. Removing instance.")
+            return None
         return count_gold_spans
 
 
