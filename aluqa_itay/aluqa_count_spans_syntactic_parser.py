@@ -109,6 +109,55 @@ class AluQACount(Model):
 
         initializer(self)
 
+    def extract_summary_vecs(self,  # type: ignore
+                question_passage: Dict[str, torch.LongTensor],
+                number_indices: torch.LongTensor,
+                mask_indices: torch.LongTensor,
+                passage_spans: torch.LongTensor = None,
+                num_spans: torch.LongTensor = None,
+                answer_as_passage_spans: torch.LongTensor = None,
+                answer_as_question_spans: torch.LongTensor = None,
+                answer_as_expressions: torch.LongTensor = None,
+                answer_as_expressions_extra: torch.LongTensor = None,
+                answer_as_counts: torch.LongTensor = None,
+                metadata: List[Dict[str, Any]] = None,
+                count_gold_spans: torch.LongTensor = None) -> Dict[str, torch.Tensor]:
+        # pylint: disable=arguments-differ
+        # Shape: (batch_size, seqlen)
+        question_passage_tokens = question_passage["tokens"]
+        # Shape: (batch_size, seqlen)
+        pad_mask = question_passage["mask"]
+        # Shape: (batch_size, seqlen)
+        seqlen_ids = question_passage["tokens-type-ids"]
+
+        # Shape: (batch_size, 3)
+        mask = mask_indices.squeeze(-1)
+        # Shape: (batch_size, seqlen)
+        cls_sep_mask = \
+            torch.ones(pad_mask.shape, device=pad_mask.device).long().scatter(1, mask, torch.zeros(mask.shape,
+                                                                                                   device=mask.device).long())
+        # Shape: (batch_size, seqlen)
+        passage_mask = seqlen_ids * pad_mask * cls_sep_mask
+        # Shape: (batch_size, seqlen)
+        question_mask = (1 - seqlen_ids) * pad_mask * cls_sep_mask
+
+        # Shape: (batch_size, seqlen, bert_dim)
+        bert_out, _ = self.BERT(question_passage_tokens, seqlen_ids, pad_mask, output_all_encoded_layers=False)
+        # Shape: (batch_size, qlen, bert_dim)
+        question_end = max(mask[:, 1])
+        question_out = bert_out[:, :question_end]
+        # Shape: (batch_size, qlen)
+        question_mask = question_mask[:, :question_end]
+        # Shape: (batch_size, out)
+        question_vector = self.summary_vector(question_out, question_mask, "question")
+
+        passage_out = bert_out
+        del bert_out
+
+        # Shape: (batch_size, bert_dim)
+        passage_vector = self.summary_vector(passage_out, passage_mask)
+        return question_vector, passage_vector
+
     def summary_vector(self, encoding, mask, in_type = "passage"):
         if in_type == "passage":
             # Shape: (batch_size, seqlen)
@@ -334,8 +383,8 @@ class AluQACount(Model):
         # if self.training:
         #     output_dict["loss"] = self._count_loss(answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask)
 
-        output_dict["loss"] = self._count_loss_types_weights[0] * self._count_regression_loss(answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask)\
-                              + self._count_loss_types_weights[1] * self._count_cross_entropy_loss(select_logits, count_gold_spans, passage_spans)
+        output_dict["loss"] = self._count_loss_types_weights[0] * self._count_regression_loss(answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_spans)\
+                              + self._count_loss_types_weights[1] * self._count_cross_entropy_loss(select_logits, count_gold_spans)
 
         with torch.no_grad():
             # Compute the metrics and add the tokenized input to the output.
@@ -397,7 +446,8 @@ class AluQACount(Model):
                 spans_probs = [prob.item() for prob in select_probs[i]]
                 span_probs_zipped = list(zip(extracted_spans, spans_probs))
 
-                selected_spans = list(filter(lambda zipped: zipped[1] > 0.1, span_probs_zipped))
+                # selected_spans = list(filter(lambda zipped: zipped[1] > 0.1, span_probs_zipped))
+                selected_spans = list(sorted(span_probs_zipped, key=lambda span: span[1], reverse=True))[:10]
                 selected_spans = [(' '.join([token.text for token in span[0]]).replace(' ##', ''), "{:.4f}".format(span[1])) for span in selected_spans]
 
                 output_file.write('Selected spans:' + '\n')
@@ -539,10 +589,11 @@ class AluQACount(Model):
     
     
     def _count_module(self, passage_out, passage_spans, question_vector):
-        # Shape: (batch_size, seq_len, 2 * bert_dim)
         span_mask = (passage_spans[:, :, 0] >= 0).squeeze(-1).long()
+        # Shape: (batch_size, # of spans, bert_dim)
         span_representations = self.span_extractor(passage_out, passage_spans, span_indices_mask=span_mask)
 
+        # Shape: (batch_size, # of spans, 2 * bert_dim)
         count_select_predictor_input = torch.cat((span_representations, question_vector.unsqueeze(1).repeat(1, span_representations.size()[1], 1)), -1)
         # Shape: (batch_size, seq_len, 2)
         select_logits = self._count_number_predictor(count_select_predictor_input)
@@ -578,7 +629,7 @@ class AluQACount(Model):
         return log_marginal_likelihood_for_count
 
 
-    def _count_regression_loss(self, answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_mask):
+    def _count_regression_loss(self, answer_as_counts, count_number, max_prob, min_prob, select_probs, passage_spans):
         # Count answers are padded with label -1,
         # so we clamp those paddings to 0 and then mask after `torch.gather()`.
         # Shape: (batch_size, # of count answers)
@@ -591,24 +642,26 @@ class AluQACount(Model):
 
         selection_loss = 1 - (max_prob - min_prob)
 
-        entropy_loss = self._calc_entropy_loss(select_probs, passage_mask)
+        entropy_loss = self._calc_entropy_loss(select_probs, passage_spans)
 
         return (huber_loss) + (selection_loss * self._count_regression_regularization_weights[0]) +\
                (entropy_loss * self._count_regression_regularization_weights[1])
 
 
-    def _count_cross_entropy_loss(self, select_logits, count_gold_spans, passage_spans):
+    def _count_cross_entropy_loss(self, select_logits, count_gold_spans):
         count_gold_spans_mask = (count_gold_spans >= 0).long()
         count_gold_spans_unmasked = util.replace_masked_values(count_gold_spans, count_gold_spans_mask, 0)
         loss = util.sequence_cross_entropy_with_logits(select_logits, count_gold_spans_unmasked, count_gold_spans_mask)
         return loss
 
-    def _calc_entropy_loss(self, select_probs, passage_mask):
+    def _calc_entropy_loss(self, select_probs, passage_spans):
+
         legal_select_probs = select_probs[(select_probs > 0) & (select_probs < 1)]
         entropies = -(legal_select_probs * torch.log(legal_select_probs) + (1 - legal_select_probs) * torch.log(1 - legal_select_probs))
 
-        seq_length = passage_mask.sum().float()
-        mean_entropy = entropies.sum() / seq_length
+        span_mask = (passage_spans[:, :, 0] >= 0).squeeze(-1).long()
+        num_spans = span_mask.sum().float()
+        mean_entropy = entropies.sum() / num_spans
 
         return mean_entropy
 
